@@ -6,12 +6,13 @@ import leafmap
 import planetary_computer
 import geopandas
 import rich.table
+import pystac_client
+import rasterio
 
 
 from osgeo import gdal, osr
 from pyproj import Transformer, CRS
 from pathlib import Path
-from pystac_client import Client
 from shapely.geometry import Point, mapping, box
 from pystac.extensions.eo import EOExtension as eo
 from IPython.display import Image, display
@@ -20,16 +21,15 @@ from rasterio import windows, features, warp
 
 
 class ReadSTAC():
-    """Read STAC API and obtain a TIFF of a desired location within the desired timeframe"""
+    """
+    Read STAC API and obtain a TIFF of a desired location within the desired timeframe
+    Default settings are set to use Microsoft's Planetary Computer API, and Sentinel-2-L2A data
+    """
     
     def __init__(
         self, 
         api_url: str = "https://planetarycomputer.microsoft.com/api/stac/v1",
         collection: str = "sentinel-2-l2a",
-        location: list = [-6.054643555224412, -50.18255000697929],
-        buffer: int = 10,
-        timerange: str = "2020-06-01/2020-12-31",
-        max_cloud_cover: int = 10
     ):
         """
         Initialize the ReadSTAC class.
@@ -37,37 +37,52 @@ class ReadSTAC():
         Parameters:
         - api_url (str): The URL of the STAC API. Default is "https://planetarycomputer.microsoft.com/api/stac/v1".
         - collection (str): The name of the collection. Default is "sentinel-2-l2a".
-        - location (list): The coordinates of the desired location. Default is [-6.054643555224412, -50.18255000697929].
-        - buffer (int): The buffer size in kilometers. Default is 10.
-        - timerange (str): The desired time range in the format "start_date/end_date". Default is "2020-06-01/2020-12-31".
-        - max_cloud_cover (int): The maximum cloud cover percentage. Default is 10.
-
         """
+        self.api_url = api_url
+        self.collection = collection
+
+    def get_items(
+        self,
+        location: list, 
+        buffer: int,
+        timerange: str,
+        max_cloud_cover: int,
+    ) -> dict:
+        """
+        Query the STAC API. 
+
+        Parameters: 
+        - location (list): The coordinates of the desired location, e.g. 
+        - buffer (int): The buffer size in kilometers.
+        - timerange (str): The desired time range in the format "start_date/end_date".
+        - max_cloud_cover (int): The maximum cloud cover percentage.
+        
+        Returns: 
+        - items (dict): Dictionary containing all the found items meeting specified criteria. 
+        """
+        
+        location = Point(location)
+        
         # Approximate degrees for 10 km buffer at the equator (1 degree of lat ~ 111 km at the equator)
         buffer_lat_deg = buffer / 111  # Buffer in degrees latitude, which is approximately constant
 
         # Approximate degrees for 10 km buffer in longitude (varies with latitude)
         # Use cosine of the latitude to adjust for the earth's curvature
         buffer_lon_deg = buffer / (111 * abs(math.cos(math.radians(location.y))))
-
+        
         # Create a box around the point using the approximate buffer
-        bbox = box(location.x - buffer_lon_deg, location.y - buffer_lat_deg,
-                   location.x + buffer_lon_deg, location.y + buffer_lat_deg)
+        bbox = [location.x - buffer_lon_deg, location.y - buffer_lat_deg,
+                location.x + buffer_lon_deg, location.y + buffer_lat_deg]
+        bbox_geojson = mapping(box(bbox[0], bbox[1], bbox[2], bbox[3]))
         
-        bbox_geojson = mapping(bbox)
-        
-        self.api_url = api_url
-        self.collection = collection
         self.location = location
         self.timerange = timerange
         self.max_cloud_cover = max_cloud_cover
         self.bbox = bbox
         self.bbox_geojson = bbox_geojson
 
-    def get_items(self):
-        
         # Open the STAC API
-        catalog = Client.open(
+        catalog = pystac_client.Client.open(
             self.api_url,
             modifier = (
                 planetary_computer.sign_inplace 
@@ -76,34 +91,39 @@ class ReadSTAC():
             ),
         )
         
-        # Search for items in the collection that intersect the buffered box
+        # Search for items in the collection that intersect the bounding box
         search = catalog.search(
             collections=[self.collection],
             bbox=self.bbox,
             datetime=self.timerange,
-            limit=50,
-            query={"eo:cloud_cover": {"lt": 10}} # Less than 10% cloud cover
+            query={"eo:cloud_cover": {"lt": self.max_cloud_cover}}
         )
 
         items = search.item_collection()
         print(f"{len(items)} Items found.")
 
-        return items
+        return dict(items)
 
 
-    def load_item(self, desired_item: str):
+    def load_item(
+        self, 
+        items: dict, 
+        filter_by: str,
+    ) -> dict:
         """
-        Load the desired item from the STAC API.
+        Load a specific item from the STAC API. Currently supports loadinge eithe the most recent or the least cloudy item. 
         
         Parameters:
-        - desired_item (str): either most recent item, or least cloud cover item. 
+        - desired_item (str): one of ['most_recent', 'least_cloudy']. 
+
+        Returns: 
+        - item (dict): the metadata dictionary for the most recent or least cloudy item. 
         """
-        items = self.get_items()
 
         #TODO: Currently this only works for single item/tile/orbit point. Need to implement for multiple tiles
-        if desired_item == "most_recent":
+        if filter_by == "most_recent":
             item = max(items, key=lambda item: item.datetime)
-        elif desired_item == "least_cloudy":
+        elif filter_by == "least_cloudy":
             item = min(items, key=lambda item: eo.ext(item).cloud_cover)
         else:
             item = None
@@ -117,12 +137,19 @@ class ReadSTAC():
         return item
     
 
-    def preview_item(self, item):
+    def preview_item(
+        self, 
+        item: dict,
+    ) -> tuple:
         """
         Preview the item on an interactive map.
         
         Parameters:
         - item (dict): The item to view, obtained from load_item().
+
+        Returns: 
+        - Table: Table containing all the channels of the item
+        - Cropped Image: preview of the image, cropped to the area of interest only
         """
 
         table = rich.table.Table("Asset Key", "Description")
@@ -130,10 +157,10 @@ class ReadSTAC():
             table.add_row(asset_key, asset.title)
 
         # Rendering With Image Preview
-        whole_image = Image(url=item.assets["rendered_preview"].href, width=500)
-
-        with rasterio.open(item.assets["rendered_preview"].href) as ds:
-            aoi_bounds = features.bounds(self.bbox)
+        image_url = item.assets["visual"].href
+        
+        with rasterio.open(image_url) as ds:
+            aoi_bounds = features.bounds(self.bbox_geojson)
             warped_aoi_bounds = warp.transform_bounds("epsg:4326", ds.crs, *aoi_bounds)
             aoi_window = windows.from_bounds(transform=ds.transform, *warped_aoi_bounds)
             band_data = ds.read(window=aoi_window)
@@ -146,34 +173,32 @@ class ReadSTAC():
         target_h = (int)(target_w / aspect)
         cropped_image = img.resize((target_w, target_h), Image.Resampling.BILINEAR)
 
-        display(table)
-        display(whole_image)
-        display(cropped_image)
+        return(table, cropped_image)
     
 
-    def download_item(self, item, bands: list = ['B02', 'B03', 'B04', 'B08']):
+    def download_item(
+        self, 
+        item: dict,
+        bands_to_download: dict, 
+        output_dir: str,
+        output_format: str,
+    ) -> str:
         """
-        Download the desired bands from the item.
+        Download the desired bands.
         
         Parameters:
         - item (dict): The item to download, obtained from load_item().
-        - bands (list): The bands to download. Default is ['B02', 'B03', 'B04', 'B08'].
+        - bands_to_download (dict): The bands to download, with band names as keys, and band keys as items.
+
+        Returns: 
+        - Path to the VRT 
         """
-
-        # Directory to save the images
-        output_dir = Path("./images")
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        # Update band names based on the provided keys
-        bands_to_download = {
-            'blue': 'blue',      # Corresponds to 'B02'
-            'green': 'green',    # Corresponds to 'B03'
-            'red': 'red',        # Corresponds to 'B04'
-            'nir08': 'nir08',    # Corresponds to 'B08'
-            # Add other bands you are interested in here
-        }
-
-        def download_band(item, band_name, band_key):
+        
+        def download_band(
+            item: dict, 
+            band_name: str, 
+            band_key: str,
+        ):
             # Generate the full path where the file will be saved
             file_path = output_dir / f"{item.id}_{band_name}.tif"
 
@@ -194,17 +219,47 @@ class ReadSTAC():
             else:
                 print(f"Failed to download {asset.href}")
 
-        # Loop through items and download the specified bands
-        for band_name, band_key in bands_to_download.items():
-            download_band(item, band_name, band_key)
+        def create_vrt(
+            item: dict, 
+            vrt_suffix: str,
+        ):
+            """
+            Create Virtual file pointing to the bands (RGB by default)
 
-        return output_dir
+            
+            """
+            item_id = item.id
+
+            # Loop through items and download the specified bands
+            for band_name, band_key in bands_to_download.items():
+                
+                download_band(item, band_name, band_key)
+                
+
+            
+            # Paths to the band files
+            red_band_path = output_dir / f"{item_id}_red.tif"
+            green_band_path = output_dir / f"{item_id}_green.tif"
+            blue_band_path = output_dir / f"{item_id}_blue.tif"
+            nir_band_path = output_dir / f"{item_id}_nir08.tif"
+            true_color_bands = [str(red_band_path), str(green_band_path), str(blue_band_path)]
+            
+            vrt_filename = output_dir / f"{item_id}_{vrt_suffix}.vrt"
+            gdal.BuildVRT(str(vrt_filename), band_files, separate=True, options=['COMPRESS=DEFLATE'])
+            print(f"Created VRT: {vrt_filename}")
+
+
+            
+        print("Bands Downloaded!")
+
+        create_vrt(item_id, true_color_bands, 'true_color')
+
+        print("VRT Created")
+        
+
+        
     
-    def create_vrt(self, item_id, band_files, vrt_suffix):
-        # Create VRT for the bands
-        vrt_filename = output_dir / f"{item_id}_{vrt_suffix}.vrt"
-        gdal.BuildVRT(str(vrt_filename), band_files, separate=True, options=['COMPRESS=DEFLATE'])
-        print(f"Created VRT: {vrt_filename}")
+    
 
     # enhance composites 
     def stretch_contrast_with_subsampling(self, vrt_path, output_path, crop_bbox, subsample=10, compression='DEFLATE'):

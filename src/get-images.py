@@ -99,10 +99,12 @@ def download_band(item, band_name, band_key):
     else:
         print(f"Failed to download {asset.href}")
 
+
 # Loop through items and download the specified bands
 for item in most_recent_items:
     for band_name, band_key in bands_to_download.items():
         download_band(item, band_name, band_key)
+
 
 # Function to create and crop VRT for given bands
 def create_vrt(item_id, band_files, vrt_suffix):
@@ -110,6 +112,7 @@ def create_vrt(item_id, band_files, vrt_suffix):
     vrt_filename = output_dir / f"{item_id}_{vrt_suffix}.vrt"
     gdal.BuildVRT(str(vrt_filename), band_files, separate=True, options=['COMPRESS=DEFLATE'])
     print(f"Created VRT: {vrt_filename}")
+
 
 # Create VRTs for each set of items' bands
 for item in most_recent_items:
@@ -129,7 +132,8 @@ for item in most_recent_items:
         false_color_bands = [str(nir_band_path), str(green_band_path), str(blue_band_path)]
         create_vrt(item_id, false_color_bands, 'false_color')
 
-# enhance composites 
+
+# enhance composites
 def stretch_contrast_with_subsampling(vrt_path, output_path, crop_bbox, subsample=10, compression='DEFLATE'):
     
     # Get the source dataset's projection from the first band file
