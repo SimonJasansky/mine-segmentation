@@ -1,15 +1,28 @@
 # Use an official GDAL image as the base image
 FROM ghcr.io/osgeo/gdal:ubuntu-full-latest
 
-# install pip
+# install the necessary packages
 RUN apt-get update && apt-get -y install \
-    # git \
+    git \
     libjpeg-dev zlib1g-dev \
-    python3-pip --fix-missing 
+    python3-pip --fix-missing \
+    python3-venv
 
 # Set the working directory in the container
 WORKDIR /src
 
+# Set an environment variable with the directory
+# where we'll be running our venv
+ENV VIRTUAL_ENV=/opt/venv
+
+# Create a virtual environment and activate it
+RUN python3 -m venv $VIRTUAL_ENV --system-site-packages
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
 # Install the necessary dependencies
-COPY requirements.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt --break-system-packages
+COPY requirements.txt .
+RUN pip install --upgrade pip
+RUN pip install -r requirements.txt
+
+# Add the virtual environment to Jupyter
+RUN python -m ipykernel install --sys-prefix --name=mineseg-venv

@@ -1,13 +1,11 @@
-# planetarycomputer.microsoft.com
+# STAC & Geospatial stuff
 planetary_computer
 pystac_client
-
-# Geospatial libraries
+stackstac
 rasterio
 geopandas
 shapely
 leafmap
-# gdal
 
 # Jupyter
 ipykernel
@@ -16,3 +14,6 @@ ipykernel
 numpy
 requests
 pandas
+
+# Plotting & Images
+Pillow
