@@ -10,11 +10,10 @@ import requests
 import os
 import numpy as np
 import pandas as pd
+
 from PIL import Image
-from osgeo import gdal
-
-
-from pyproj import Transformer
+from osgeo import gdal, osr
+from pyproj import Transformer, CRS
 from shapely.geometry import Point, mapping, box
 from pystac.extensions.eo import EOExtension as eo
 
@@ -38,6 +37,12 @@ class ReadSTAC():
         """
         self.api_url = api_url
         self.collection = collection
+
+        # Set up a temporary directory to store the downloaded files
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        temp_dir = os.path.join(script_dir, 'data/temp')
+        os.makedirs(temp_dir, exist_ok=True)
+        self.temp_dir = temp_dir
 
     ########################
     ### Helper Functions ###
@@ -215,13 +220,16 @@ class ReadSTAC():
 
         # Rendering With Image Preview
         with rasterio.open(item.assets["visual"].href) as ds:
-            aoi_bounds = features.bounds(self.bbox_geojson)
+            aoi_bounds = rasterio.features.bounds(self.bbox_geojson)
             warped_aoi_bounds = rasterio.warp.transform_bounds("epsg:4326", ds.crs, *aoi_bounds)
             band_data = ds.read(window=rasterio.windows.from_bounds(transform=ds.transform, *warped_aoi_bounds))
 
         img = Image.fromarray(np.transpose(band_data, axes=[1, 2, 0]))
         aspect = img.size[0] / img.size[1]
         cropped_image = img.resize((800, int(800 / aspect)), Image.Resampling.BILINEAR)
+
+        # Downsample image to decrease size of the image
+        cropped_image.thumbnail((800, 800))
 
         return table, cropped_image
     
@@ -298,6 +306,7 @@ class ReadSTAC():
         self, 
         stack: xarray.Dataset, 
         output_path: str,
+        compression = "zstd",
     ) -> None:
         """
         Save the stackstac.stack object as a GeoTIFF.
@@ -310,10 +319,10 @@ class ReadSTAC():
         - None
         """
         # Save the stack as a GeoTIFF
-        stack.rio.to_raster(output_path, compress="zstd")
+        stack.rio.to_raster(output_path, compress=compression)
 
 
-    def show_stack(
+    def display_stack_as_image(
         self, 
         stack: xarray.Dataset,
     ) -> None:
@@ -338,7 +347,7 @@ class ReadSTAC():
         item: dict, 
         band_name: str, 
         band_key: str,
-    ) -> None:
+    ) -> str:
         """
         Download the specified band from the item to the specified path, in TIF format. 
 
@@ -346,28 +355,19 @@ class ReadSTAC():
         - item (dict): The item to download, obtained from load_item().
         - band_name (str): The name of the band.
         - band_key (str): The key of the band.
-        - output_dir (str): The output directory, relative to the working directory /src.
 
         Returns:
-        - None
+        - file_path (str): The path to the downloaded file.
         """
-        # Get the directory of the current script
-        script_dir = os.path.dirname(os.path.realpath(__file__))
-
-        # Set the output directory to 'src/data' relative to the script directory
-        output_dir = os.path.join(script_dir, 'data/temp')
-
-        # Create the output directory if it doesn't exist
-        os.makedirs(output_dir, exist_ok=True)
 
         # Generate the full path where the file will be saved
-        file_path = os.path.join(output_dir, f"{item.id}_{band_name}.tif")
+        file_path = os.path.join(self.temp_dir, f"{item.id}_{band_name}.tif")
 
         # Check if the file already exists
         if os.path.exists(file_path):
             print(f"File {file_path} already exists, skipping download.")
-            return
-        else:
+            return file_path
+        else: 
             print("Downloading", file_path)
 
         # Get the asset/href for the specified band
@@ -382,56 +382,120 @@ class ReadSTAC():
         else:
             print(f"Failed to download {asset.href}")
 
+        return file_path
+
 
     def tif_to_vrt(
-            self,
-            item: dict, 
-            bands_to_download: dict,
-            output_dir: str,
-        ) -> None:
-            """
-            Create a VRT file for the specified bands.
+        self,
+        item_id: str,
+        band_paths: list, 
+    ) -> str:
+        """
+        Create a VRT file for the specified bands.
 
-            Parameters:
-            - item (dict): The item to download, obtained from load_item().
-            - bands_to_download (dict): The bands to download, with band names as keys, and band keys as items.
-            - output_dir (str): The output directory.           
-            
-            Returns:
-            - None
-            """
-            item_id = item.id
-
-            # Loop through items and download the specified bands
-            for band_name, band_key in bands_to_download.items():
-                self.download_band(item, band_name, band_key, output_dir)
-
-            # Paths to the band files
-            band_paths = [str(f"{output_dir}/{item_id}_{band_name}.tif") for band_name in bands_to_download.keys()]
-            
-            vrt_filename = output_dir / f"{item_id}.vrt"
-            gdal.BuildVRT(str(vrt_filename), band_paths, separate=True, options=['COMPRESS=DEFLATE'])
-            print(f"Created VRT: {vrt_filename}")
+        Parameters:
+        - item_id (str): The ID of the item.
+        - band_paths (list): The paths to the band files.        
+        
+        Returns:
+        - vrt_filepath (str): The path to the VRT file.
+        """
+        # Create VRT for the bands
+        vrt_filepath = f"{self.temp_dir}/{item_id}.vrt"
+        options = gdal.BuildVRTOptions(separate=True, options=['COMPRESS=DEFLATE'])
+        gdal.BuildVRT(vrt_filepath, band_paths, options=options)
+        print(f"Created VRT: {vrt_filepath}")
+        return vrt_filepath
 
 
-    def download_item(
+    def stretch_contrast_with_subsampling(
+        self, 
+        vrt_path, 
+        output_path, 
+        crop_bbox, 
+        subsample=10, 
+        compression='DEFLATE'
+    ) -> None:
+        
+        # Get the source dataset's projection from the first band file
+        src_ds = gdal.Open(str(vrt_path))
+        src_wkt = src_ds.GetProjection()
+        src_srs = osr.SpatialReference(wkt=src_wkt)
+
+        # Convert the osr SpatialReference to a pyproj CRS object
+        crs_src = CRS.from_wkt(src_wkt)
+
+        # Create transformer to project crop_bbox into source's CRS
+        transformer_to_src_crs = Transformer.from_crs("epsg:4326", crs_src, always_xy=True)
+
+        # Get bounds of crop_bbox in source's CRS
+        minx, miny, maxx, maxy = crop_bbox.bounds
+        minx, miny = transformer_to_src_crs.transform(minx, miny)
+        maxx, maxy = transformer_to_src_crs.transform(maxx, maxy)
+
+        # Crop VRT
+        cropped_vrt_filename = vrt_path.parent / f"tmp.vrt"
+        gdal.Warp(str(cropped_vrt_filename), str(vrt_path), outputBounds=(minx, miny, maxx, maxy), dstNodata=None)
+
+        # Open cropped VRT
+        src = gdal.Open(str(cropped_vrt_filename))
+        driver = gdal.GetDriverByName('GTiff')
+
+        # Define the creation options for compression
+        co_options = ['COMPRESS=' + compression]
+
+        dst_ds = None
+
+        for bi in range(1, src.RasterCount + 1):
+            band = src.GetRasterBand(bi)
+            band_arr_subsample = band.ReadAsArray(buf_xsize=band.XSize // subsample, buf_ysize=band.YSize // subsample)
+            b_min, b_max = np.percentile(band_arr_subsample, [2, 98])
+            band_arr = band.ReadAsArray()
+            band_arr = np.clip(255 * (band_arr - b_min) / (b_max - b_min), 0, 255).astype(np.uint8)
+
+            if dst_ds is None:
+                # Create the output dataset with compression options
+                dst_ds = driver.Create(str(output_path), src.RasterXSize, src.RasterYSize, src.RasterCount, gdal.GDT_Byte, options=co_options)
+                dst_ds.SetGeoTransform(src.GetGeoTransform())
+                dst_ds.SetProjection(src.GetProjection())
+
+            dst_ds.GetRasterBand(bi).WriteArray(band_arr)
+
+        dst_ds = None  # Close and save the dataset
+        cropped_vrt_filename.unlink()
+
+
+    def download_item_as_vrt(
         self, 
         item: dict,
-        output_dir: str,
         bands_to_download: dict = {'B02': 'blue', 'B03': 'green', 'B04': 'red'},
     ) -> str:
         """
-        Download the desired bands.
-        
-        Parameters:
-        - item (dict): The item to download, obtained from load_item().
-        - bands_to_download (dict): The bands to download, with band names as keys, and band keys as items.
+        Download the bands of an item, enhance the contrasts, and save as a VRT file.
 
-        Returns: 
-        - Path to the VRT 
+        Parameters:
+        - item (dict): The item to download.
+        - bands_to_download (dict): The bands to download.
+
+        Returns:
+        - vrt_filepath (str): The path to the VRT file.
         """
+        item_id = item.id
 
         # Download the bands
-        create_vrt(item, bands_to_download, output_dir)
+        band_paths = []
+        for band_key, band_name in bands_to_download.items():
+            band_path = self.download_band(item, band_name, band_key)
+            band_paths.append(band_path)
+
+        # Create a VRT file for the downloaded bands
+        vrt_filepath = self.tif_to_vrt(item.id, band_paths)
+
+        # Stretch the contrast of the VRT file
+        output_path = f"{self.temp_dir}/{item_id}_stretched.tif"
+        crop_bbox = item['bbox']
+        self.stretch_contrast_with_subsampling(vrt_filepath, output_path, crop_bbox)
+
+        return output_path
     
     
