@@ -25,4 +25,4 @@ RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
 # Add the virtual environment to Jupyter
-RUN python -m ipykernel install --sys-prefix --name=mineseg-venv
+RUN python -m ipykernel install --user --name=venv
