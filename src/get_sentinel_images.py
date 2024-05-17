@@ -11,6 +11,7 @@ import os
 import numpy as np
 import pandas as pd
 
+from pathlib import Path
 from PIL import Image
 from osgeo import gdal, osr
 from pyproj import Transformer, CRS
@@ -72,33 +73,7 @@ class ReadSTAC():
 
         return bbox_transformed
     
-    def stretch_contrast(
-        self, 
-        stack: xarray.Dataset,
-    ) -> xarray.Dataset:
-        """
-        Stretch the contrast of a stackstac.stack object.
 
-        Parameters:
-        - stack (xarray.Dataset): The stackstac.stack object to stretch.
-
-        Returns:
-        - stack (xarray.Dataset): The contrast-stretched stackstac.stack object.
-        """
-        # Loop over each band in the stack
-        for band in range(len(stack)):
-
-            # Calculate the 2nd and 98th percentiles of the band data
-            min_val = int(stack[band].min().values)
-            max_val = int(stack[band].max().values)
-
-            # Stretch the contrast and scale the values to the range 0-255
-            stack[band] = 255 * (stack[band] - min_val) / (max_val - min_val)
-
-            # Clip the values to the range 0-255 and convert to uint8
-            stack[band] = stack[band].clip(0, 255).astype('uint8')
-
-        return stack
 
     ############################
     ### Reading STAC Methods ###
@@ -141,6 +116,7 @@ class ReadSTAC():
         self.timerange = timerange
         self.max_cloud_cover = max_cloud_cover
         self.bbox = bbox
+
         self.bbox_geojson = bbox_geojson
 
         # Open the STAC API
@@ -269,6 +245,34 @@ class ReadSTAC():
 
         # optionally removing the time dimension
         stack = stack.squeeze()
+
+        return stack
+    
+    def stretch_contrast(
+        self, 
+        stack: xarray.Dataset,
+    ) -> xarray.Dataset:
+        """
+        Stretch the contrast of a stackstac.stack object.
+
+        Parameters:
+        - stack (xarray.Dataset): The stackstac.stack object to stretch.
+
+        Returns:
+        - stack (xarray.Dataset): The contrast-stretched stackstac.stack object.
+        """
+        # Loop over each band in the stack
+        for band in range(len(stack)):
+
+            # Calculate the 2nd and 98th percentiles of the band data
+            min_val = int(stack[band].min().values)
+            max_val = int(stack[band].max().values)
+
+            # Stretch the contrast and scale the values to the range 0-255
+            stack[band] = 255 * (stack[band] - min_val) / (max_val - min_val)
+
+            # Clip the values to the range 0-255 and convert to uint8
+            stack[band] = stack[band].clip(0, 255).astype('uint8')
 
         return stack
 
@@ -403,7 +407,7 @@ class ReadSTAC():
         # Create VRT for the bands
         vrt_filepath = f"{self.temp_dir}/{item_id}.vrt"
         options = gdal.BuildVRTOptions(separate=True, options=['COMPRESS=DEFLATE'])
-        gdal.BuildVRT(vrt_filepath, band_paths, options=options)
+        gdal.BuildVRT(vrt_filepath, band_paths)
         print(f"Created VRT: {vrt_filepath}")
         return vrt_filepath
 
@@ -490,11 +494,11 @@ class ReadSTAC():
 
         # Create a VRT file for the downloaded bands
         vrt_filepath = self.tif_to_vrt(item.id, band_paths)
+        vrt_filepath = Path(vrt_filepath)
 
         # Stretch the contrast of the VRT file
         output_path = f"{self.temp_dir}/{item_id}_stretched.tif"
-        crop_bbox = item['bbox']
-        self.stretch_contrast_with_subsampling(vrt_filepath, output_path, crop_bbox)
+        self.stretch_contrast_with_subsampling(vrt_filepath, output_path, box(*self.bbox))
 
         return output_path
     
