@@ -3,7 +3,8 @@ import planetary_computer
 import pystac.item_collection
 import pystac_client
 import stackstac
-import xarray
+import xarray as xr
+import dask.array as da
 import pyproj
 import rioxarray
 import rasterio
@@ -12,6 +13,8 @@ import os
 import numpy as np
 import pandas as pd
 import pystac
+from skimage import exposure
+
 
 from pathlib import Path
 from PIL import Image
@@ -61,24 +64,25 @@ class ReadSTAC():
         Transform a bounding box to a desired CRS.
 
         Parameters:
+        - bbox (list): The bounding box in the form [minx, miny, maxx, maxy].
         - crs_src (str): The source CRS.
         - crs_dst (str): The destination CRS.
 
         Returns:
-        - bbox_transformed (list): The transformed bounding box.
+        - bbox_transformed (list): The transformed bounding box in the form [minx, miny, maxx, maxy].
         """
         transformer = Transformer.from_crs(crs_src, crs_dst, always_xy=True)
         bbox_transformed = [transformer.transform(x, y) for x, y in zip(bbox[::2], bbox[1::2])]
 
-        # flatten the list
+        # Flatten the list
         bbox_transformed = [item for sublist in bbox_transformed for item in sublist]
 
         return bbox_transformed
     
 
-    ############################
-    ### Reading STAC Methods ###
-    ############################
+    #####################
+    ### Read STAC API ###
+    #####################
 
     def get_items(
         self,
@@ -210,9 +214,9 @@ class ReadSTAC():
 
         return table, cropped_image
     
-    ############################################
-    ### Processing as xarray using stackstac ###
-    ############################################
+    ###################################################
+    ### Processing xarray.DataArray using stackstac ###
+    ###################################################
 
     def get_stack(
         self, 
@@ -220,7 +224,7 @@ class ReadSTAC():
         bands: list,
         filter_by: str = None,
         resolution: int = 10,
-    ) -> xarray.DataArray:
+    ) -> xr.DataArray:
         """
         Load a specific item from the STAC API using stackstac. 
         Currently supports loading eithe the most recent or the least cloudy item. 
@@ -235,9 +239,9 @@ class ReadSTAC():
         Returns: 
         """
         # Filter the items
-        item = self.filter_item(items, filter_by)
+        item = self.filter_item(items=items, filter_by=filter_by)
 
-        # Get Item CRS
+        # Get Item CRS in case it must be set manually
         if isinstance(item, pystac.item_collection.ItemCollection):
             # If the item is a collection, get the CRS from the first item
             item_crs = item[0].properties["proj:epsg"]
@@ -245,111 +249,105 @@ class ReadSTAC():
             # If the item is not a collection, get the CRS from the item
             item_crs = item.properties["proj:epsg"]
 
-        # slice the x and y dimensions to the specified bounds
-        # first, transform the bbox to the desired CRS
+        # slice the x and y dimensions to the original bounding box
+
+        # For this, transform the bounding box to the CRS of the item
         bounds = self.transform_bbox(self.bbox, "epsg:4326", item_crs)
 
         # Load the item
         stack = stackstac.stack(
             item, 
-            resolution=resolution, 
+            resolution=(resolution, resolution), 
             assets=bands, 
             bounds=bounds, 
             epsg=item_crs
             )
 
-        # optionally removing the time dimension
+        # optionally removing the time dimension, in case there is only one item
         stack = stack.squeeze()
 
         return stack
-    
-    def stretch_contrast(
+        
+
+    def stretch_contrast_stack(
         self, 
-        stack: xarray.Dataset,
-    ) -> xarray.Dataset:
+        stack: xr.Dataset,
+        upper_percentile: float = .98,
+        lower_percentile: float = .02,
+    ) -> xr.Dataset:
         """
-        Stretch the contrast of a stackstac.stack object.
+        Perform contrast stretching.
+        To compute the percentiles, the stack object must be loaded in memory.
 
         Parameters:
-        - stack (xarray.Dataset): The stackstac.stack object to stretch.
+        - stack (xr.Dataset): The stackstac.stack object to stretch.
+        - upper_percentile (float): The upper percentile for contrast stretching. Default is .98.
+        - lower_percentile (float): The lower percentile for contrast stretching. Default is .02.
 
         Returns:
-        - stack (xarray.Dataset): The contrast-stretched stackstac.stack object.
+        - stack_stretched (xr.Dataset): The reprojected and contrast-stretched stackstac.stack object.
         """
-        # Loop over each band in the stack
-        for band in range(len(stack)):
+        
+        # Load the stack object in memory
+        # This is necessary to compute the quantiles
+        stack = stack.compute()
 
-            # Calculate the 2nd and 98th percentiles of the band data
-            min_val = int(stack[band].min().values)
-            max_val = int(stack[band].max().values)
+        # Perform contrast stretching for each band
+        for band_name in stack.band.values:
+            band = stack.sel(band=band_name)
 
-            # Stretch the contrast and scale the values to the range 0-255
-            stack[band] = 255 * (stack[band] - min_val) / (max_val - min_val)
+            # Calculate the percentiles for the band
+            min_val = band.quantile(lower_percentile).values
+            max_val = band.quantile(upper_percentile).values
 
-            # Clip the values to the range 0-255 and convert to uint8
-            stack[band] = stack[band].clip(0, 255).astype('uint8')
+            # Rescale the intensity of the image to cover the range 0-255
+            stretched_band = (band - min_val) / (max_val - min_val) * 255
+
+            # clip the value to the range 0-255
+            stretched_band = np.clip(stretched_band, 0, 255).astype(np.uint8)
+
+            # Update the band in the stack
+            stack.loc[dict(band=band_name)] = stretched_band
+
+        # change datatype of output stack from float to int
+        stack = stack.astype(np.uint8)
 
         return stack
-
-    def get_stretched_stack(
-        self, 
-        items: pystac.item.Item | pystac.item_collection.ItemCollection, 
-        filter_by: str = None,
-        resolution: int = 10,
-        bands: list = ['B02', 'B03', 'B04'],
-    ) -> xarray.Dataset:
-        """
-        Get a stackstac.stack object, reproject it to a given CRS, and perform contrast stretching.
-
-        Parameters:
-        - items (dict): Dictionary containing all the found items.
-        - filter_by (str): One of ['most_recent', 'least_cloudy'].
-        - resolution (int): The resolution of the image.
-        - bands (list): The bands to load.
-        - bounds (list): The bounds of the image.
-        - target_crs (str): The target CRS.
-        - subsample (int, optional): The subsampling factor for contrast stretching. Default is 10.
-
-        Returns:
-        - stack_stretched (xarray.Dataset): The reprojected and contrast-stretched stackstac.stack object.
-        """
-        # Get the stack item
-        stack = self.get_stack(items, filter_by, resolution, bands)
-
-        # Perform contrast stretching
-        stack_stretched = self.stretch_contrast(stack)
-
-        return stack_stretched
+    
     
     def save_stack_as_geotiff(
         self, 
-        stack: xarray.Dataset, 
-        output_path: str,
+        stack: xr.Dataset, 
         compression = "zstd",
     ) -> None:
         """
         Save the stackstac.stack object as a GeoTIFF.
 
         Parameters:
-        - stack (xarray.Dataset): The stackstac.stack object to save.
-        - output_path (str): The output path.
+        - stack (xr.Dataset): The stackstac.stack object to save.
+
 
         Returns:
         - None
         """
+        # Get the item ID
+        item_id = str(stack.id.values)
+        output_path = f"{self.temp_dir}/{item_id}.tif"
+
         # Save the stack as a GeoTIFF
         stack.rio.to_raster(output_path, compress=compression)
+        print(f"Saved stack as GeoTIFF: {output_path}")
 
 
     def display_stack_as_image(
         self, 
-        stack: xarray.Dataset,
+        stack: xr.Dataset,
     ) -> None:
         """
         Display the stackstac.stack object.
 
         Parameters:
-        - stack (xarray.Dataset): The stackstac.stack object to display.
+        - stack (xr.Dataset): The stackstac.stack object to display.
 
         Returns:
         - None
