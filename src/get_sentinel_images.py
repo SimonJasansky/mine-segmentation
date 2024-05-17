@@ -1,5 +1,6 @@
 import math
 import planetary_computer
+import pystac.item_collection
 import pystac_client
 import stackstac
 import xarray
@@ -10,6 +11,7 @@ import requests
 import os
 import numpy as np
 import pandas as pd
+import pystac
 
 from pathlib import Path
 from PIL import Image
@@ -73,7 +75,6 @@ class ReadSTAC():
 
         return bbox_transformed
     
-
 
     ############################
     ### Reading STAC Methods ###
@@ -145,9 +146,9 @@ class ReadSTAC():
 
     def filter_item(
         self, 
-        items: dict, 
+        items: pystac.item_collection.ItemCollection, 
         filter_by: str,
-    ) -> dict:
+    ) -> pystac.item_collection.ItemCollection | pystac.item.Item:
         """
         Filter for a specific item from the STAC API. Currently supports loadinge eithe the most recent or the least cloudy item. 
         
@@ -176,7 +177,7 @@ class ReadSTAC():
 
     def preview_item(
         self, 
-        item: dict,
+        item: pystac.item.Item,
     ) -> tuple:
         """
         Preview an item on an interactive map.
@@ -215,10 +216,10 @@ class ReadSTAC():
 
     def get_stack(
         self, 
-        items: dict, 
+        items: pystac.item.Item | pystac.item_collection.ItemCollection, 
+        bands: list,
         filter_by: str = None,
         resolution: int = 10,
-        bands: list = ['B02', 'B03', 'B04'],
     ) -> xarray.DataArray:
         """
         Load a specific item from the STAC API using stackstac. 
@@ -236,12 +237,26 @@ class ReadSTAC():
         # Filter the items
         item = self.filter_item(items, filter_by)
 
+        # Get Item CRS
+        if isinstance(item, pystac.item_collection.ItemCollection):
+            # If the item is a collection, get the CRS from the first item
+            item_crs = item[0].properties["proj:epsg"]
+        else:
+            # If the item is not a collection, get the CRS from the item
+            item_crs = item.properties["proj:epsg"]
+
         # slice the x and y dimensions to the specified bounds
-        # transform the bounds to the desired CRS
-        bounds = self.transform_bbox(self.bbox, "epsg:4326", item.properties["proj:epsg"])
+        # first, transform the bbox to the desired CRS
+        bounds = self.transform_bbox(self.bbox, "epsg:4326", item_crs)
 
         # Load the item
-        stack = stackstac.stack(item, resolution=resolution, assets=bands, bounds=bounds)
+        stack = stackstac.stack(
+            item, 
+            resolution=resolution, 
+            assets=bands, 
+            bounds=bounds, 
+            epsg=item_crs
+            )
 
         # optionally removing the time dimension
         stack = stack.squeeze()
@@ -278,7 +293,7 @@ class ReadSTAC():
 
     def get_stretched_stack(
         self, 
-        items, 
+        items: pystac.item.Item | pystac.item_collection.ItemCollection, 
         filter_by: str = None,
         resolution: int = 10,
         bands: list = ['B02', 'B03', 'B04'],
