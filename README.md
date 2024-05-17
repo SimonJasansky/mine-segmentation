@@ -3,14 +3,6 @@ mine-segmentation
 
 This project aims to automate the semantic segmentation of mining areas in satellite images. It explores the use of Visual Foundation Models (VFM) for object detection and segmentation, and compares their performance with custom trained models.
 
-## Accessing Planetary Computer STAC API
-To access the PC STAC API, run: 
-```
-planetarycomputer configure
-```
-and paste the API subscription key that is available from 
-
-
 
 Project Organization
 ------------
