@@ -237,7 +237,10 @@ class ReadSTAC():
         - bounds (list, optional): The bounds of the image. Default is None. 
 
         Returns: 
+        - stack (xr.DataArray): The stackstac.stack object.
         """
+        print("Loading stack...")
+
         # Filter the items
         item = self.filter_item(items=items, filter_by=filter_by)
 
@@ -287,7 +290,8 @@ class ReadSTAC():
         Returns:
         - stack_stretched (xr.Dataset): The reprojected and contrast-stretched stackstac.stack object.
         """
-        
+        print("Stretching contrast...")
+
         # Load the stack object in memory
         # This is necessary to compute the quantiles
         stack = stack.compute()
@@ -319,7 +323,7 @@ class ReadSTAC():
         self, 
         stack: xr.Dataset, 
         compression = "zstd",
-    ) -> None:
+    ) -> str:
         """
         Save the stackstac.stack object as a GeoTIFF.
 
@@ -328,15 +332,16 @@ class ReadSTAC():
 
 
         Returns:
-        - None
+        - output_path (str): The path to the saved GeoTIFF file.
         """
         # Get the item ID
         item_id = str(stack.id.values)
         output_path = f"{self.temp_dir}/{item_id}.tif"
 
         # Save the stack as a GeoTIFF
+        print(f"Saving stack as GeoTIFF under: {output_path}")
         stack.rio.to_raster(output_path, compress=compression)
-        print(f"Saved stack as GeoTIFF: {output_path}")
+        return(output_path)
 
 
     def display_stack_as_image(
