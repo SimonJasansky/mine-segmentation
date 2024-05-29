@@ -13,14 +13,13 @@ import os
 import numpy as np
 import pandas as pd
 import pystac
+
 from skimage import exposure
-
-
 from pathlib import Path
 from PIL import Image
 from osgeo import gdal, osr
 from pyproj import Transformer, CRS
-from shapely.geometry import Point, mapping, box
+from shapely.geometry import Point, mapping, box, shape
 from pystac.extensions.eo import EOExtension as eo
 
 class ReadSTAC():
@@ -44,11 +43,15 @@ class ReadSTAC():
         self.api_url = api_url
         self.collection = collection
 
-        # Set up a temporary directory to store the downloaded files
-        script_dir = os.path.dirname(os.path.realpath(__file__))
-        temp_dir = os.path.join(script_dir, 'data/temp')
-        os.makedirs(temp_dir, exist_ok=True)
-        self.temp_dir = temp_dir
+        self.data_dir = "/workspaces/mine-segmentation/data/interim"
+
+        # Set the MGRS key based on the API provider. It's used to filter MGRS tiles from STAC item properties.
+        if "microsoft" in self.api_url:
+            self.mgrs_key = "s2:mgrs_tile"
+        elif "aws" in self.api_url:
+            self.mgrs_key = "grid:code"
+        else:
+            raise ValueError("Unknown API provider. Currently only Microsoft's Planetary computer and AWS are supported. Please specify the MGRS key manually.")
 
     ########################
     ### Helper Functions ###
@@ -154,29 +157,43 @@ class ReadSTAC():
         filter_by: str,
     ) -> pystac.item_collection.ItemCollection | pystac.item.Item:
         """
-        Filter for a specific item from the STAC API. Currently supports loadinge eithe the most recent or the least cloudy item. 
+        Filter for the most recent or the least cloudy items. 
         
         Parameters:
-        - desired_item (str): one of ['most_recent', 'least_cloudy']. 
+        - filter_by (str): one of ['most_recent', 'least_cloudy']. 
 
-        Returns: 
-        - item (dict): the metadata dictionary for the most recent or least cloudy item. 
+        Returns:
+        - item (pystac.item_collection.ItemCollection | pystac.item.Item): The filtered items.
         """
-        #TODO: Currently this only works for single item/tile/orbit point. Need to implement for multiple tiles
-        if filter_by == "most_recent":
-            item = max(items, key=lambda item: item.datetime)
-        elif filter_by == "least_cloudy":
-            item = min(items, key=lambda item: eo.ext(item).cloud_cover)
+       
+        # Get all unique MGRS tile codes
+        mgrs_tiles = set([item.properties[self.mgrs_key] for item in items])
+        print(f"Found {len(mgrs_tiles)} unique MGRS tiles.")
+
+        filtered_items = []
+
+        # Filter for each MGRS tile
+        for tile in mgrs_tiles:
+            items_tile = [item for item in items if item.properties[self.mgrs_key] == tile]
+            
+            if filter_by == "most_recent":
+                item = max(items_tile, key=lambda item: item.datetime)
+            elif filter_by == "least_cloudy":
+                item = min(items_tile, key=lambda item: eo.ext(item).cloud_cover)
+            else:
+                raise ValueError("Unknown filter_by value. Please specify either 'most_recent' or 'least_cloudy'.")
+            
+            print(
+                f"For MGRS Tile {tile}, choosing {item.id} from {item.datetime.date()}"
+                f" with {eo.ext(item).cloud_cover}% cloud cover"
+            )
+
+            filtered_items.append(item)
+
+        if len(filtered_items) == 1:
+            return filtered_items[0]
         else:
-            "No filter selected, returning all items."
-            return items
-
-        print(
-            f"Choosing {item.id} from {item.datetime.date()}"
-            f" with {eo.ext(item).cloud_cover}% cloud cover"
-        )
-
-        return item
+            return pystac.item_collection.ItemCollection(filtered_items)
     
 
     def preview_item(
@@ -242,32 +259,31 @@ class ReadSTAC():
         print("Loading stack...")
 
         # Filter the items
-        item = self.filter_item(items=items, filter_by=filter_by)
-
+        items = self.filter_item(items=items, filter_by=filter_by)
+        
         # Get Item CRS in case it must be set manually
-        if isinstance(item, pystac.item_collection.ItemCollection):
+        if isinstance(items, pystac.item_collection.ItemCollection):
             # If the item is a collection, get the CRS from the first item
-            item_crs = item[0].properties["proj:epsg"]
+            item_crs = items[0].properties["proj:epsg"]
         else:
             # If the item is not a collection, get the CRS from the item
-            item_crs = item.properties["proj:epsg"]
+            item_crs = items.properties["proj:epsg"]
 
-        # slice the x and y dimensions to the original bounding box
-
+        # Slice the x and y dimensions to the original bounding box 
         # For this, transform the bounding box to the CRS of the item
         bounds = self.transform_bbox(self.bbox, "epsg:4326", item_crs)
 
         # Load the item
         stack = stackstac.stack(
-            item, 
+            items, 
             resolution=(resolution, resolution), 
             assets=bands, 
             bounds=bounds, 
             epsg=item_crs
             )
-
-        # optionally removing the time dimension, in case there is only one item
-        stack = stack.squeeze()
+        
+        # optionally stitch together multiple objects by taking the more recent pixel value
+        stack = stackstac.mosaic(stack, dim='time').squeeze()
 
         return stack
         
@@ -322,7 +338,7 @@ class ReadSTAC():
     def save_stack_as_geotiff(
         self, 
         stack: xr.Dataset, 
-        compression = "zstd",
+        filename: str,
     ) -> str:
         """
         Save the stackstac.stack object as a GeoTIFF.
@@ -330,17 +346,19 @@ class ReadSTAC():
         Parameters:
         - stack (xr.Dataset): The stackstac.stack object to save.
 
-
         Returns:
         - output_path (str): The path to the saved GeoTIFF file.
         """
-        # Get the item ID
-        item_id = str(stack.id.values)
-        output_path = f"{self.temp_dir}/{item_id}.tif"
+
+        # check if filename ends with .tif, if not add it 
+        if not filename.endswith(".tif"):
+            filename = f"{filename}.tif"
+            
+        output_path = f"{self.data_dir}/{filename}"
 
         # Save the stack as a GeoTIFF
         print(f"Saving stack as GeoTIFF under: {output_path}")
-        stack.rio.to_raster(output_path, compress=compression)
+        stack.rio.to_raster(output_path)
         return(output_path)
 
 
@@ -383,7 +401,7 @@ class ReadSTAC():
         """
 
         # Generate the full path where the file will be saved
-        file_path = os.path.join(self.temp_dir, f"{item.id}_{band_name}.tif")
+        file_path = os.path.join(self.data_dir, f"{item.id}_{band_name}.tif")
 
         # Check if the file already exists
         if os.path.exists(file_path):
@@ -423,7 +441,7 @@ class ReadSTAC():
         - vrt_filepath (str): The path to the VRT file.
         """
         # Create VRT for the bands
-        vrt_filepath = f"{self.temp_dir}/{item_id}.vrt"
+        vrt_filepath = f"{self.data_dir}/{item_id}.vrt"
         options = gdal.BuildVRTOptions(separate=True, options=['COMPRESS=DEFLATE'])
         gdal.BuildVRT(vrt_filepath, band_paths)
         print(f"Created VRT: {vrt_filepath}")
@@ -515,7 +533,7 @@ class ReadSTAC():
         vrt_filepath = Path(vrt_filepath)
 
         # Stretch the contrast of the VRT file
-        output_path = f"{self.temp_dir}/{item_id}_stretched.tif"
+        output_path = f"{self.data_dir}/{item_id}_stretched.tif"
         self.stretch_contrast_with_subsampling(vrt_filepath, output_path, box(*self.bbox))
 
         return output_path
