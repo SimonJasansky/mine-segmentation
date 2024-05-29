@@ -5,6 +5,7 @@ FROM ghcr.io/osgeo/gdal:ubuntu-full-latest
 RUN apt-get update && apt-get -y install \
     git \
     libjpeg-dev zlib1g-dev \
+    unrar \
     python3-pip --fix-missing \
     python3-venv
 
