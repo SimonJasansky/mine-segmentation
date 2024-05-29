@@ -1,9 +1,6 @@
 import requests
 import os
-import requests
-import shutil
-import zipfile
-import patoolib
+import subprocess
 
 # Script to download mining polygons from Maus et al. (2022) and Tang et al (2023)
 
@@ -20,7 +17,10 @@ def download_file(url, file_path):
         print("Failed to download the file.")
 
 def extract_rar(file_path, extract_path):
-    patoolib.extract_archive(file_path, outdir=extract_path)
+    try:
+        subprocess.run(["unrar", "x", "-o+", file_path, extract_path], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurred while extracting {file_path}: {str(e)}")
 
 def download_and_extract(url, file_path, extract_path):
     download_file(url, file_path)
@@ -28,15 +28,15 @@ def download_and_extract(url, file_path, extract_path):
         extract_rar(file_path, extract_path)
 
 # Download and extract Maus et al
-geopackage_file_path = "/workspaces/mine-segmentation/data/external/global_mining_polygons.gpkg"
-if not os.path.exists(geopackage_file_path):
-    download_and_extract(URL_MAUS, geopackage_file_path, "/workspaces/mine-segmentation/data/external")
+maus_file_path = "/workspaces/mine-segmentation/data/external/maus_mining_polygons.gpkg"
+if not os.path.exists(maus_file_path):
+    download_and_extract(URL_MAUS, maus_file_path, "/workspaces/mine-segmentation/data/external")
 else:
     print("File already exists.")
 
 # Download and extract Tang et al
-rar_file_path = "/workspaces/mine-segmentation/data/external/mine_area_polygons.rar"
-if not os.path.exists(rar_file_path):
-    download_and_extract(URL_TANG, rar_file_path, "/workspaces/mine-segmentation/data/external")
+tang_file_path = "/workspaces/mine-segmentation/data/external/tang_mining_polygons.rar"
+if not os.path.exists(tang_file_path):
+    download_and_extract(URL_TANG, tang_file_path, "/workspaces/mine-segmentation/data/external")
 else:
     print("File already exists.")
