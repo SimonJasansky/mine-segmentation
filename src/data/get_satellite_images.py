@@ -32,6 +32,7 @@ class ReadSTAC():
         self, 
         api_url: str = "https://planetarycomputer.microsoft.com/api/stac/v1",
         collection: str = "sentinel-2-l2a",
+        data_dir: str = "/workspaces/mine-segmentation/data/interim",
     ):
         """
         Initialize the ReadSTAC class.
@@ -39,19 +40,12 @@ class ReadSTAC():
         Parameters:
         - api_url (str): The URL of the STAC API. Default is "https://planetarycomputer.microsoft.com/api/stac/v1".
         - collection (str): The name of the collection. Default is "sentinel-2-l2a".
+        - data_dir (str): The directory where the data will be saved. Default is "/workspaces/mine-segmentation/data/interim".
         """
         self.api_url = api_url
         self.collection = collection
+        self.data_dir = data_dir
 
-        self.data_dir = "/workspaces/mine-segmentation/data/interim"
-
-        # Set the MGRS key based on the API provider. It's used to filter MGRS tiles from STAC item properties.
-        if "microsoft" in self.api_url:
-            self.mgrs_key = "s2:mgrs_tile"
-        elif "aws" in self.api_url:
-            self.mgrs_key = "grid:code"
-        else:
-            raise ValueError("Unknown API provider. Currently only Microsoft's Planetary computer and AWS are supported. Please specify the MGRS key manually.")
 
     ########################
     ### Helper Functions ###
@@ -148,47 +142,101 @@ class ReadSTAC():
         items = search.item_collection()
         print(f"{len(items)} Items found.")
 
-        return items
-    
+        # add unique tile identifier
+        items = self.harmonize_properties(items)
 
+        return items
+
+
+    def harmonize_properties(
+            self, 
+            items: pystac.item_collection.ItemCollection,     
+        ) -> pystac.item_collection.ItemCollection:
+        """
+        Assigns a unique tile identifier to each item in the collection.
+
+        Parameters:
+        - items (pystac.item_collection.ItemCollection): The items to harmonize.
+
+        Returns:
+        - items (pystac.item_collection.ItemCollection): The harmonized items with an additional property "unique_tile_identifier".
+        """
+        # Set a unique tile ID 
+        if "sentinel" in self.collection:
+            if "microsoft" in self.api_url:
+                unique_tile_identifier = "s2:mgrs_tile"
+            elif "aws" in self.api_url:
+                unique_tile_identifier = "grid:code"
+            else:
+                raise ValueError("Unknown API provider. Currently only Microsoft's Planetary computer and AWS are supported.")
+            
+            # add the unique ID
+            for item in items:
+                unique_tile_id = item.properties[unique_tile_identifier]
+                item.properties["unique_tile_identifier"] = unique_tile_id
+
+        elif "landsat" in self.collection:           
+            # add the unique ID
+            for item in items:
+                unique_tile_id = f"{item.properties["landsat:wrs_path"]}_{item.properties["landsat:wrs_row"]}"
+                item.properties["unique_tile_identifier"] = unique_tile_id
+        else:
+            raise ValueError("Unknown collection. Currently only Landsat and Sentinel collections are supported.")
+        
+        return items
+        
     def filter_item(
         self, 
         items: pystac.item_collection.ItemCollection, 
         filter_by: str,
+        take_best_n: int = 1,
     ) -> pystac.item_collection.ItemCollection | pystac.item.Item:
         """
         Filter for the most recent or the least cloudy items. 
         
         Parameters:
+        - items (pystac.item_collection.ItemCollection): The items to filter.
         - filter_by (str): one of ['most_recent', 'least_cloudy']. 
+        - take_best_n (int): The number of best items to take. Default is 1.
 
         Returns:
         - item (pystac.item_collection.ItemCollection | pystac.item.Item): The filtered items.
         """
-       
-        # Get all unique MGRS tile codes
-        mgrs_tiles = set([item.properties[self.mgrs_key] for item in items])
-        print(f"Found {len(mgrs_tiles)} unique MGRS tiles.")
+
+        unique_tile_ids = set([item.properties["unique_tile_identifier"] for item in items])
+        print(f"Found {len(unique_tile_ids)} unique tile ids.")
 
         filtered_items = []
 
-        # Filter for each MGRS tile
-        for tile in mgrs_tiles:
-            items_tile = [item for item in items if item.properties[self.mgrs_key] == tile]
+        # Apply Filter for each unique tile/orbit points
+        for tile_id in unique_tile_ids:
+
+            # Filter items by unique_tile_id
+            items_tile = [item for item in items if item.properties["unique_tile_identifier"] == tile_id]
             
             if filter_by == "most_recent":
-                item = max(items_tile, key=lambda item: item.datetime)
+                items_sorted = sorted(items_tile, key=lambda item: item.datetime, reverse=True)
+                item = items_sorted[0:take_best_n]
             elif filter_by == "least_cloudy":
-                item = min(items_tile, key=lambda item: eo.ext(item).cloud_cover)
+                items_sorted = sorted(items_tile, key=lambda item: eo.ext(item).cloud_cover)
+                item = items_sorted[0:take_best_n]
             else:
                 raise ValueError("Unknown filter_by value. Please specify either 'most_recent' or 'least_cloudy'.")
             
+            item_ids = [item.id for item in item]
+            item_dates = [item.datetime.date() for item in item]
+            item_cloud_covers = [eo.ext(item).cloud_cover for item in item]
+            
             print(
-                f"For MGRS Tile {tile}, choosing {item.id} from {item.datetime.date()}"
-                f" with {eo.ext(item).cloud_cover}% cloud cover"
+                f"Choosing the best {take_best_n} items."
+                f"For unique tile {tile_id}, choosing {item_ids} from {item_dates}"
+                f" with {item_cloud_covers}% cloud cover"
             )
 
             filtered_items.append(item)
+
+        # Flatten the list, as it might be a list of lists
+        filtered_items = [item for sublist in filtered_items for item in sublist]
 
         if len(filtered_items) == 1:
             return filtered_items[0]
@@ -240,6 +288,7 @@ class ReadSTAC():
         items: pystac.item.Item | pystac.item_collection.ItemCollection, 
         bands: list,
         filter_by: str = None,
+        take_best_n: int = 1,
         resolution: int = 10,
     ) -> xr.DataArray:
         """
@@ -248,10 +297,10 @@ class ReadSTAC():
         
         Parameters:
         - items (dict): Dictionary containing all the found items.
-        - filter_by (str, optional): one of ['most_recent', 'least_cloudy'].
-        - resolution (int, optional): The resolution of the image. Default is 10.
         - bands (list, optional): The bands to load. Default is ['B02', 'B03', 'B04'].
-        - bounds (list, optional): The bounds of the image. Default is None. 
+        - filter_by (str, optional): one of ['most_recent', 'least_cloudy'].
+        - take_best_n (int, optional): The number of best items to take. Default is 1.
+        - resolution (int, optional): The resolution of the image. Default is 10.
 
         Returns: 
         - stack (xr.DataArray): The stackstac.stack object.
@@ -259,7 +308,7 @@ class ReadSTAC():
         print("Loading stack...")
 
         # Filter the items
-        items = self.filter_item(items=items, filter_by=filter_by)
+        items = self.filter_item(items=items, filter_by=filter_by, take_best_n=take_best_n)
         
         # Get Item CRS in case it must be set manually
         if isinstance(items, pystac.item_collection.ItemCollection):
