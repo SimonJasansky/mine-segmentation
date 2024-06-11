@@ -86,9 +86,10 @@ class ReadSTAC():
 
     def get_items(
         self,
-        location: list, 
-        buffer: int,
         timerange: str,
+        bbox: list | tuple = None,
+        location: list = None, 
+        buffer: int = None,
         max_cloud_cover: int = 100,
     ) -> dict:
         """
@@ -98,24 +99,29 @@ class ReadSTAC():
         - location (list): Coordinates of desired location. Format [longitude, latitude], using WGS84.
         - buffer (int): The buffer size in kilometers.
         - timerange (str): The desired time range in the format "start_date/end_date".
+        - bbox (list): The bounding box in the form [minx, miny, maxx, maxy]. Default is None.
         - max_cloud_cover (int): The maximum cloud cover percentage.
         
         Returns: 
         - items (dict): Dictionary containing all the found items meeting specified criteria. 
         """
-        location = Point(location)
-        
-        # Approximate degrees for 10 km buffer at the equator (1 degree of lat ~ 111 km at the equator)
-        buffer_lat_deg = buffer / 111  # Buffer in degrees latitude, which is approximately constant
+        if bbox is not None:
+            # Use the provided bounding box
+            bbox_geojson = mapping(box(bbox[0], bbox[1], bbox[2], bbox[3]))
+        else:
+            location = Point(location)
+            
+            # Approximate degrees for 10 km buffer at the equator (1 degree of lat ~ 111 km at the equator)
+            buffer_lat_deg = buffer / 111  # Buffer in degrees latitude, which is approximately constant
 
-        # Approximate degrees for 10 km buffer in longitude (varies with latitude)
-        # Use cosine of the latitude to adjust for the earth's curvature
-        buffer_lon_deg = buffer / (111 * abs(math.cos(math.radians(location.y))))
-        
-        # Create a box around the point using the approximate buffer
-        bbox = [location.x - buffer_lon_deg, location.y - buffer_lat_deg,
-                location.x + buffer_lon_deg, location.y + buffer_lat_deg]
-        bbox_geojson = mapping(box(bbox[0], bbox[1], bbox[2], bbox[3]))
+            # Approximate degrees for 10 km buffer in longitude (varies with latitude)
+            # Use cosine of the latitude to adjust for the earth's curvature
+            buffer_lon_deg = buffer / (111 * abs(math.cos(math.radians(location.y))))
+            
+            # Create a box around the point using the approximate buffer
+            bbox = [location.x - buffer_lon_deg, location.y - buffer_lat_deg,
+                    location.x + buffer_lon_deg, location.y + buffer_lat_deg]
+            bbox_geojson = mapping(box(bbox[0], bbox[1], bbox[2], bbox[3]))
         
         self.location = location
         self.timerange = timerange
@@ -188,7 +194,7 @@ class ReadSTAC():
         
         return items
         
-        
+
     def filter_item(
         self, 
         items: pystac.item_collection.ItemCollection, 
