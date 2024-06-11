@@ -12,7 +12,9 @@ import requests
 import os
 import numpy as np
 import pandas as pd
+import geopandas as gpd
 import pystac
+import leafmap
 
 from skimage import exposure
 from pathlib import Path
@@ -21,6 +23,7 @@ from osgeo import gdal, osr
 from pyproj import Transformer, CRS
 from shapely.geometry import Point, mapping, box, shape
 from pystac.extensions.eo import EOExtension as eo
+
 
 class ReadSTAC():
     """
@@ -242,7 +245,28 @@ class ReadSTAC():
             return filtered_items[0]
         else:
             return pystac.item_collection.ItemCollection(filtered_items)
-    
+        
+
+    def query_item_by_name(
+        self,
+        item_name: str,        
+    ) -> pystac.item.Item: 
+        """
+        Query the STAC API for a specific item by name.
+
+        Parameters:
+        - item_name (str): The name of the item to query. Example: S2B_MSIL2A_20240610T141719_R010_T21QZB_20240610T171009
+
+        Returns:
+        - item (pystac.item.Item): The queried item.
+        """
+        item_url = f"{self.api_url}/collections/{self.collection}/items/{item_name}"
+
+        # Load the individual item metadata and sign the assets
+        item = pystac.Item.from_file(item_url)
+
+        return item
+
 
     def preview_item(
         self, 
@@ -278,6 +302,28 @@ class ReadSTAC():
         cropped_image.thumbnail((800, 800))
 
         return table, cropped_image
+
+    def preview_tile_outlines(
+        self,
+        items: pystac.item_collection.ItemCollection,
+    ):
+        """
+        Preview the outlines of the tiles on an interactive map.
+
+        Parameters:
+        - items (pystac.item_collection.ItemCollection): The items to preview.
+
+        Returns:
+        - m (leafmap.Map): The interactive map.
+        """
+        geojson = items.to_dict()
+
+        # Create a map
+        m = leafmap.Map(center=(self.location.y, self.location.x), zoom=10)
+
+        # Add the tile outlines
+        m.add_geojson(geojson, layer_name="Tiles")
+        return m
     
     ###################################################
     ### Processing xarray.DataArray using stackstac ###
@@ -290,6 +336,7 @@ class ReadSTAC():
         filter_by: str = None,
         take_best_n: int = 1,
         resolution: int = 10,
+        crop_to_bounds: bool = True,
     ) -> xr.DataArray:
         """
         Load a specific item from the STAC API using stackstac. 
@@ -297,10 +344,11 @@ class ReadSTAC():
         
         Parameters:
         - items (dict): Dictionary containing all the found items.
-        - bands (list, optional): The bands to load. Default is ['B02', 'B03', 'B04'].
+        - bands (list): The bands to load. 
         - filter_by (str, optional): one of ['most_recent', 'least_cloudy'].
         - take_best_n (int, optional): The number of best items to take. Default is 1.
         - resolution (int, optional): The resolution of the image. Default is 10.
+        - crop_to_bounds (bool, optional): Whether to crop the image to the bounding box. Default is True.
 
         Returns: 
         - stack (xr.DataArray): The stackstac.stack object.
@@ -318,9 +366,12 @@ class ReadSTAC():
             # If the item is not a collection, get the CRS from the item
             item_crs = items.properties["proj:epsg"]
 
-        # Slice the x and y dimensions to the original bounding box 
-        # For this, transform the bounding box to the CRS of the item
-        bounds = self.transform_bbox(self.bbox, "epsg:4326", item_crs)
+        if crop_to_bounds:
+            # Slice the x and y dimensions to the original bounding box 
+            # For this, transform the bounding box to the CRS of the item
+            bounds = self.transform_bbox(self.bbox, "epsg:4326", item_crs)
+        else:
+            bounds = None
 
         # Load the item
         stack = stackstac.stack(
@@ -340,8 +391,8 @@ class ReadSTAC():
     def stretch_contrast_stack(
         self, 
         stack: xr.Dataset,
-        upper_percentile: float = .98,
-        lower_percentile: float = .02,
+        upper_percentile: float = 1.0,
+        lower_percentile: float = 0.0,
     ) -> xr.Dataset:
         """
         Perform contrast stretching.
@@ -434,7 +485,6 @@ class ReadSTAC():
     def download_band(
         self,
         item: dict, 
-        band_name: str, 
         band_key: str,
     ) -> str:
         """
@@ -442,7 +492,6 @@ class ReadSTAC():
 
         Parameters:
         - item (dict): The item to download, obtained from load_item().
-        - band_name (str): The name of the band.
         - band_key (str): The key of the band.
 
         Returns:
@@ -450,7 +499,7 @@ class ReadSTAC():
         """
 
         # Generate the full path where the file will be saved
-        file_path = os.path.join(self.data_dir, f"{item.id}_{band_name}.tif")
+        file_path = os.path.join(self.data_dir, f"{item.id}_{band_key}.tif")
 
         # Check if the file already exists
         if os.path.exists(file_path):
@@ -502,7 +551,6 @@ class ReadSTAC():
         vrt_path, 
         output_path, 
         crop_bbox, 
-        subsample=10, 
         compression='DEFLATE'
     ) -> None:
         
