@@ -10,6 +10,7 @@ URL_TANG = "https://zenodo.org/records/6806817/files/Supplementary%201%EF%BC%9Am
 def download_file(url, file_path):
     response = requests.get(url)
     if response.status_code == 200:
+        print(f"Downloading file from {url} to {file_path}")
         with open(file_path, "wb") as file:
             file.write(response.content)
         print("File downloaded successfully.")
@@ -27,16 +28,21 @@ def download_and_extract(url, file_path, extract_path):
     if file_path.endswith(".rar"):
         extract_rar(file_path, extract_path)
 
-# Download and extract Maus et al
-maus_file_path = "/workspaces/mine-segmentation/data/external/maus_mining_polygons.gpkg"
-if not os.path.exists(maus_file_path):
-    download_and_extract(URL_MAUS, maus_file_path, "/workspaces/mine-segmentation/data/external")
-else:
-    print("File already exists.")
 
-# Download and extract Tang et al
-tang_file_path = "/workspaces/mine-segmentation/data/external/tang_mining_polygons.rar"
-if not os.path.exists(tang_file_path):
-    download_and_extract(URL_TANG, tang_file_path, "/workspaces/mine-segmentation/data/external")
-else:
-    print("File already exists.")
+if __name__ == "__main__":
+
+    # Download and extract Maus et al
+    maus_file_path = "/workspaces/mine-segmentation/data/external/maus_mining_polygons.gpkg"
+    if not os.path.exists(maus_file_path):
+        print("File does not exist yet, starting download...")
+        download_and_extract(URL_MAUS, maus_file_path, "/workspaces/mine-segmentation/data/external")
+    else:
+        print(f"File {maus_file_path} already exists.")
+
+    # Download and extract Tang et al
+    tang_file_path = "/workspaces/mine-segmentation/data/external/tang_mining_polygons.rar"
+    if not os.path.exists(tang_file_path):
+        print("File does not exist yet, starting download...")
+        download_and_extract(URL_TANG, tang_file_path, "/workspaces/mine-segmentation/data/external")
+    else:
+        print(f"File {tang_file_path} already exists.")
