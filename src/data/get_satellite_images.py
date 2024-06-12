@@ -34,7 +34,7 @@ class ReadSTAC():
         self, 
         api_url: str = "https://planetarycomputer.microsoft.com/api/stac/v1",
         collection: str = "sentinel-2-l2a",
-        data_dir: str = "/workspaces/mine-segmentation/data/interim",
+        data_dir: str = "data/interim",
     ):
         """
         Initialize the ReadSTAC class.
