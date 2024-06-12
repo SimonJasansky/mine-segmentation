@@ -1,6 +1,7 @@
 import requests
 import os
 import subprocess
+import shutil
 
 # Script to download mining polygons from Maus et al. (2022) and Tang et al (2023)
 
@@ -33,15 +34,15 @@ def download_and_extract(url, file_path, extract_path):
 if __name__ == "__main__":
 
     # Download and extract Maus et al
-    maus_file_path = "/workspaces/mine-segmentation/data/external/maus_mining_polygons.gpkg"
+    maus_file_path = "data/external/maus_mining_polygons.gpkg"
     if not os.path.exists(maus_file_path):
-        print(f"File {maus_file_path} does n/Users/simonjasansky/Downloads/global_miningarea_v2_5arcminute.tifot exist yet, starting download...")
-        download_and_extract(URL_MAUS, maus_file_path, "/workspaces/mine-segmentation/data/external")
+        print(f"File {maus_file_path} does not exist yet, starting download...")
+        download_and_extract(URL_MAUS, maus_file_path, "data/external")
     else:
         print(f"File {maus_file_path} already exists.")
 
     # Download Maus et al Mining area Raster
-    maus_raster_file_path = "/workspaces/mine-segmentation/data/external/maus_mining_raster.tif"
+    maus_raster_file_path = "data/external/maus_mining_raster.tif"
     if not os.path.exists(maus_raster_file_path):
         print(f"File {maus_raster_file_path} does not exist yet, starting download...")
         download_file(URL_MAUS_RASTER, maus_raster_file_path)
@@ -49,9 +50,30 @@ if __name__ == "__main__":
         print(f"File {maus_raster_file_path} already exists.")
 
     # Download and extract Tang et al
-    tang_file_path = "/workspaces/mine-segmentation/data/external/tang_mining_polygons.rar"
+    tang_file_path = "data/external/tang_mining_polygons.rar"
     if not os.path.exists(tang_file_path):
         print(f"File {tang_file_path} does not exist yet, starting download...")
-        download_and_extract(URL_TANG, tang_file_path, "/workspaces/mine-segmentation/data/external")
+        download_and_extract(URL_TANG, tang_file_path, "data/external")
     else:
         print(f"File {tang_file_path} already exists.")
+
+
+    # Fix the folder names in Tang's data
+    parent_dir = "data/external/tang_mining_polygons"
+    # os.rename("data/external/'Supplementary 1：mine area polygons'", parent_dir)
+
+    # Fix the subfolder names
+    for old_dir_name in os.listdir(parent_dir):
+        # Skip files
+        if not os.path.isdir(os.path.join(parent_dir, old_dir_name)):
+            continue
+
+        # Replace spaces with underscores and remove colons
+        new_dir_name = old_dir_name.replace(' ', '_')
+
+        # Create the full paths to the old and new directories
+        old_dir_path = os.path.join(parent_dir, old_dir_name)
+        new_dir_path = os.path.join(parent_dir, new_dir_name)
+
+        # Rename the directory
+        shutil.move(old_dir_path, new_dir_path)
