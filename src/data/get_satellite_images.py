@@ -19,7 +19,6 @@ import leafmap
 from skimage import exposure
 from pathlib import Path
 from PIL import Image
-from osgeo import gdal, osr
 from pyproj import Transformer, CRS
 from shapely.geometry import Point, mapping, box, shape
 from pystac.extensions.eo import EOExtension as eo
@@ -187,7 +186,7 @@ class ReadSTAC():
         elif "landsat" in self.collection:           
             # add the unique ID
             for item in items:
-                unique_tile_id = f"{item.properties["landsat:wrs_path"]}_{item.properties["landsat:wrs_row"]}"
+                unique_tile_id = f'{item.properties["landsat:wrs_path"]}_{item.properties["landsat:wrs_row"]}'
                 item.properties["unique_tile_identifier"] = unique_tile_id
         else:
             raise ValueError("Unknown collection. Currently only Landsat and Sentinel collections are supported.")
