@@ -1,5 +1,6 @@
 import streamlit as st
 import geopandas as gpd
+import pandas as pd
 import random
 import shapely
 import leafmap.foliumap as leafmap
@@ -102,6 +103,7 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
 
 
 def accept_polygons(tile, accepted_polygons, S2_tile_name, dataset):
+    
     # Get the tile id
     tile_id = tile.index[0]
 
@@ -111,14 +113,18 @@ def accept_polygons(tile, accepted_polygons, S2_tile_name, dataset):
     # Get the sentinel 2 id
     sentinel_2_id = S2_tile_name
 
-    # Add the polygons to the dataset
-    for index, row in accepted_polygons.iterrows():
-        dataset = dataset.append({
-            "tile_id": tile_id,
-            "tile_bbox": tile_bbox,
-            "sentinel_2_id": sentinel_2_id,
-            "geometry": row['geometry']
-        }, ignore_index=True)
+    # convert accepted polygons to a multipolygon
+    accepted_multipolygon = shapely.geometry.MultiPolygon(accepted_polygons['geometry'].values)
+
+    accepted_polygons_gdf = gpd.GeoDataFrame([{
+        "tile_id": tile_id,
+        "tile_bbox": tile_bbox,
+        "sentinel_2_id": sentinel_2_id,
+        "geometry": accepted_multipolygon
+    }], crs="EPSG:4326")
+
+    # Concatenate the dataset with the new row
+    dataset = pd.concat([dataset, accepted_polygons_gdf], ignore_index=True)
 
     return dataset
 
@@ -132,28 +138,46 @@ def main():
         - Tang et al: https://zenodo.org/doi/10.5281/zenodo.6806816 
     """)
 
+    # Add a button to refresh the tile
+    if st.button("Refresh Tile"):
+        st.session_state.tile = get_random_tile(mining_area_tiles)
+
     # Load data
     mining_area_tiles, maus_gdf, tang_gdf, stac_reader, dataset = load_data()
 
     # Add a streamlit radio button for selecting the year
     year = st.radio("Select Year", list(range(2016, 2023)), index=3)
 
-    # Get a random tile
-    tile = get_random_tile(mining_area_tiles)
+    # Get a random tile if not already selected
+    if "tile" not in st.session_state:
+        st.session_state.tile = get_random_tile(mining_area_tiles)
 
     # Visualize the tile
-    maus_gdf_filtered, tang_gdf_filtered, s2_tile_id = visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year)
+    maus_gdf_filtered, tang_gdf_filtered, s2_tile_id = visualize_tile(st.session_state.tile, maus_gdf, tang_gdf, stac_reader, year)
 
-    # Add buttons for accepting maus and tang polygons
-    if st.button("Accept Maus", key="maus"):
-        dataset = accept_polygons(tile, accepted_polygons=maus_gdf_filtered)
-    if st.button("Accept Tang", key="tang"):
-        dataset = accept_polygons(tile, accepted_polygons=tang_gdf_filtered)
+    # Create a layout with 4 columns
+    col1, col2, col3, col4 = st.columns(4)
+
+    # Add a button to refresh the tile in the first column
+    with col1:
+        if st.button("Refresh Tile", key="refresh"):
+            st.session_state.tile = get_random_tile(mining_area_tiles)
+
+    # Add buttons for accepting maus and tang polygons in the second and third columns
+    with col2:
+        if st.button("Accept Maus", key="maus"):
+            dataset = accept_polygons(st.session_state.tile, maus_gdf_filtered, s2_tile_id, dataset)
+            st.write("Polygons by Maus (blue) accepted successfully")
+    with col3:
+        if st.button("Accept Tang", key="tang"):
+            dataset = accept_polygons(st.session_state.tile, tang_gdf_filtered, s2_tile_id, dataset)
+            st.write("Polygons by Tang (red) accepted successfully")
 
     # Save the dataset
-    if st.button("Save Dataset"):
-        dataset.to_file(DATASET, driver="GPKG")
-
+    with col4:
+        if st.button("Save Dataset", key="save"):
+            dataset.to_file(DATASET, driver="GPKG")
+            st.write("Dataset saved successfully")
 
 if __name__ == "__main__":
     main()
