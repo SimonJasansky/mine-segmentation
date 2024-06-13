@@ -31,7 +31,25 @@ def download_and_extract(url, file_path, extract_path):
         extract_rar(file_path, extract_path)
 
 
+def set_working_directory_n_parents_up(n):
+    # Get the current working directory
+    current_dir = os.getcwd()
+
+    # Go up n parent directories
+    for _ in range(n):
+        current_dir = os.path.dirname(current_dir)
+
+    # Change the working directory
+    os.chdir(current_dir)
+
+    # Print the new working directory
+    print("New working directory:", os.getcwd())
+
+
 if __name__ == "__main__":
+
+    # Set the working directory to the root of the project
+    set_working_directory_n_parents_up(1)
 
     # Download and extract Maus et al
     maus_file_path = "data/external/maus_mining_polygons.gpkg"
@@ -60,7 +78,7 @@ if __name__ == "__main__":
 
     # Fix the folder names in Tang's data
     parent_dir = "data/external/tang_mining_polygons"
-    # os.rename("data/external/'Supplementary 1：mine area polygons'", parent_dir)
+    os.rename("data/external/Supplementary 1：mine area polygons", parent_dir)
 
     # Fix the subfolder names
     for old_dir_name in os.listdir(parent_dir):
@@ -77,3 +95,5 @@ if __name__ == "__main__":
 
         # Rename the directory
         shutil.move(old_dir_path, new_dir_path)
+
+    print("Mining polygons downloaded and extracted successfully.")
