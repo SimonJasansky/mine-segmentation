@@ -40,7 +40,9 @@ for x in tqdm(range(src.width)):
 
 # Create a GeoDataFrame from the bounding boxes and the area
 gdf = gpd.GeoDataFrame(geometry=[box(*bbox) for bbox in bounding_boxes], crs="EPSG:4326")
-gdf["mining_area"] = mining_area
+gdf["mining_area_maus"] = mining_area
+
+print(gdf.head())
 
 # save the bounding boxes as a geopackage file
 gdf.to_file("/workspaces/mine-segmentation/data/interim/mining_areas.gpkg", driver="GPKG")
