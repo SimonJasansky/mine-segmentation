@@ -9,9 +9,6 @@ RUN apt-get update && apt-get -y install \
     python3-pip --fix-missing \
     python3-venv
 
-# Set the working directory in the container
-WORKDIR /src
-
 # Set an environment variable with the directory
 # where we'll be running our venv
 ENV VIRTUAL_ENV=/opt/venv
@@ -27,3 +24,6 @@ RUN pip install -r requirements.txt
 
 # Add the virtual environment to Jupyter
 RUN python -m ipykernel install --user --name=venv
+
+# Add the root directory to the PYTHONPATH
+ENV PYTHONPATH "${PYTHONPATH}:/workspaces/mine-segmentation"
