@@ -372,9 +372,6 @@ class ReadSTAC():
             # If the item is not a collection, get the CRS from the item
             item_crs = items.properties["proj:epsg"]
 
-            # add the S2 tile id
-            stack.attrs["s2_tile_id"] = items.id
-
         if crop_to_bounds:
             # Slice the x and y dimensions to the original bounding box 
             # For this, transform the bounding box to the CRS of the item
@@ -390,6 +387,10 @@ class ReadSTAC():
             bounds=bounds, 
             epsg=item_crs
             )
+
+        if isinstance(items, pystac.item.Item):
+            # add the S2 tile id
+            stack.attrs["s2_tile_id"] = items.id
         
         # optionally stitch together multiple objects by taking the more recent pixel value
         stack = stackstac.mosaic(stack, dim='time').squeeze()
