@@ -1,0 +1,24 @@
+name: cloudspace
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - rasterio
+  - rioxarray
+  - stackstac
+  - geopandas
+  - shapely
+  - leafmap
+  - ipykernel
+  - jupyter-server-proxy
+  - localtileserver
+  - numpy
+  - requests
+  - pandas
+  - matplotlib
+  - Pillow
+  - scikit-image
+  - streamlit
+  - pip:
+    - pystac_client
+    - planetary_computer

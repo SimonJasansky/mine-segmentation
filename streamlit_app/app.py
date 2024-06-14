@@ -6,6 +6,9 @@ import shapely
 import leafmap.foliumap as leafmap
 import os
 
+import sys
+sys.path.append("..")
+
 from src.data.get_satellite_images import ReadSTAC
 
 MINING_AREAS = "/workspaces/mine-segmentation/data/interim/mining_areas.gpkg"
