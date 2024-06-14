@@ -43,7 +43,7 @@ def load_data():
     stac_reader = ReadSTAC(
         api_url=api_url, 
         collection = "sentinel-2-l2a",
-        data_dir="/workspaces/mine-segmentation/streamlit_app/data"
+        data_dir="streamlit_app/data"
         )
 
     return mining_area_tiles, maus_gdf, tang_gdf, stac_reader, dataset
