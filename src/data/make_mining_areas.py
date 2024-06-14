@@ -45,4 +45,6 @@ gdf["mining_area_maus"] = mining_area
 print(gdf.head())
 
 # save the bounding boxes as a geopackage file
-gdf.to_file("/workspaces/mine-segmentation/data/interim/mining_areas.gpkg", driver="GPKG")
+gdf.to_file("data/interim/mining_areas.gpkg", driver="GPKG")
+
+print("Successfully saved mining area tiles.")

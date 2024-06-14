@@ -11,10 +11,10 @@ sys.path.append("..")
 
 from src.data.get_satellite_images import ReadSTAC
 
-MINING_AREAS = "/workspaces/mine-segmentation/data/interim/mining_areas.gpkg"
-MAUS_POLYGONS = "/workspaces/mine-segmentation/data/external/maus_mining_polygons.gpkg"
-TANG_POLYGONS = "/workspaces/mine-segmentation/data/external/tang_mining_polygons/74548_mine_polygons/74548_projected.shp"
-DATASET = "/workspaces/mine-segmentation/data/interim/mining_tiles_with_masks.gpkg"
+MINING_AREAS = "data/interim/mining_areas.gpkg"
+MAUS_POLYGONS = "data/external/maus_mining_polygons.gpkg"
+TANG_POLYGONS = "data/external/tang_mining_polygons/74548_mine_polygons/74548_projected.shp"
+DATASET = "data/interim/mining_tiles_with_masks.gpkg"
 
 # Load data
 @st.cache_data
