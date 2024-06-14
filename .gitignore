@@ -68,6 +68,8 @@ target/
 
 # VS Code
 .vscode/
+# except the launch.json
+!.vscode/launch.json
 
 # Spyder
 .spyproject/
