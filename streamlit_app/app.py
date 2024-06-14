@@ -69,6 +69,9 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
         max_cloud_cover=10
     )
 
+    if len(items) < 1: 
+        st.error("No S2 images found for this tile. Please refresh the tile.")
+
     stack = stac_reader.get_stack(items, filter_by="least_cloudy", bands=bands, resolution=10)    
     s2_tile_id = stack.attrs['s2_tile_id']
     stack_stretched = stac_reader.stretch_contrast_stack(stack, upper_percentile=0.99, lower_percentile=0.01)

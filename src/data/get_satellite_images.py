@@ -1,6 +1,6 @@
 import math
 import planetary_computer
-import pystac.item_collection
+import pystac
 import pystac_client
 import stackstac
 import xarray as xr
@@ -13,8 +13,9 @@ import os
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-import pystac
 import leafmap
+import shapely
+import warnings
 
 from skimage import exposure
 from pathlib import Path
@@ -77,6 +78,25 @@ class ReadSTAC():
         bbox_transformed = [item for sublist in bbox_transformed for item in sublist]
 
         return bbox_transformed
+
+    def select_item_w_largest_overlap(self, items): 
+
+        largest_overlap_area = 0
+        selected_item = None
+
+        for item in items:
+            item_geometry = shapely.geometry.shape(item.geometry)  
+            bbox_geometry = shapely.geometry.box(*self.bbox)  
+
+            # Calculate the intersection area
+            intersection_area = item_geometry.intersection(bbox_geometry).area
+            
+            # Check if this item has the largest overlap so far
+            if intersection_area > largest_overlap_area:
+                largest_overlap_area = intersection_area
+                selected_item = item
+
+        return selected_item
     
 
     #####################
@@ -201,7 +221,9 @@ class ReadSTAC():
         take_best_n: int = 1,
     ) -> pystac.item_collection.ItemCollection | pystac.item.Item:
         """
-        Filter for the most recent or the least cloudy items. 
+        Filter for the most recent or the least cloudy items.
+        Filter by unique orbit point/MGRS tile. This means that multiple items (ItemCollection) 
+        can be returned, even if take_best_n = 1. 
         
         Parameters:
         - items (pystac.item_collection.ItemCollection): The items to filter.
@@ -341,6 +363,7 @@ class ReadSTAC():
         bands: list,
         filter_by: str = None,
         take_best_n: int = 1,
+        allow_mosaic: bool = False,
         resolution: int = 10,
         crop_to_bounds: bool = True,
     ) -> xr.DataArray:
@@ -353,12 +376,17 @@ class ReadSTAC():
         - bands (list): The bands to load. 
         - filter_by (str, optional): one of ['most_recent', 'least_cloudy'].
         - take_best_n (int, optional): The number of best items to take. Default is 1.
+        - allow_mosaic (bool, optional): Whether to allow mosaicing of multiple items. Default is false
         - resolution (int, optional): The resolution of the image. Default is 10.
         - crop_to_bounds (bool, optional): Whether to crop the image to the bounding box. Default is True.
 
         Returns: 
         - stack (xr.DataArray): The stackstac.stack object.
         """
+        if take_best_n > 1 and allow_mosaic == False: 
+            print("""Warning: Got take_best_n > 1 and allow_mosaic = False.
+                This will not return a mosaic, but only one single pystac.item.Item!""")
+
         print("Loading stack...")
 
         # Filter the items
@@ -368,6 +396,11 @@ class ReadSTAC():
         if isinstance(items, pystac.item_collection.ItemCollection):
             # If the item is a collection, get the CRS from the first item
             item_crs = items[0].properties["proj:epsg"]
+
+            # if mosaicing is not allowed, take the item with the largest overlap with the bounds
+            if not allow_mosaic:
+                items = self.select_item_w_largest_overlap(items)
+
         else:
             # If the item is not a collection, get the CRS from the item
             item_crs = items.properties["proj:epsg"]
@@ -391,8 +424,12 @@ class ReadSTAC():
         if isinstance(items, pystac.item.Item):
             # add the S2 tile id
             stack.attrs["s2_tile_id"] = items.id
+            stack.coords["s2_tile_id"] = items.id
+            print(f"Returning stack from single S2 image with ID: {items.id}")
+        else:
+            print("Returning Mosaic of mutliple S2 Images!")
         
-        # optionally stitch together multiple objects by taking the more recent pixel value
+        # In any case, remove the time dimension (would be 1 in case it's a pystac.item.Item)
         stack = stackstac.mosaic(stack, dim='time').squeeze()
 
         return stack

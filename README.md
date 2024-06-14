@@ -19,6 +19,14 @@ Additionally, you have to install `unrar` using `apt-get`:
 sudo apt-get install unrar
 ```
 
+# Running the streamlit app for producing the source dataset
+
+Run the following from the `mine-segmentation` directory:
+```bash
+streamlit run streamlit_app/app.py
+```
+
+
 # Project Organization
 ------------
 
