@@ -66,8 +66,10 @@ target/
 # Pycharm
 .idea
 
-# VS Code
-.vscode/
+# VS Code except the launch.json
+.vscode/*
+!.vscode/launch.json
+
 
 # Spyder
 .spyproject/
