@@ -3,8 +3,23 @@ mine-segmentation
 
 This project aims to automate the semantic segmentation of mining areas in satellite images. It explores the use of Visual Foundation Models (VFM) for object detection and segmentation, and compares their performance with custom trained models.
 
+# Installation
 
-Project Organization
+## Using Docker
+
+## On Lightning Studio
+
+Update the conda environment with: 
+```bash
+conda env update --name myenv --file environment.yml --prune
+```
+
+Additionally, you have to install `unrar` using `apt-get`: 
+```bash
+sudo apt-get install unrar
+```
+
+# Project Organization
 ------------
 
     ├── LICENSE
