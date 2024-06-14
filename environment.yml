@@ -20,6 +20,8 @@ dependencies:
   - scikit-image
   - seaborn
   - streamlit
+  - flask 
+  - flask-restx
   - pip
   - pip:
     - pystac_client
