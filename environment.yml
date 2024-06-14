@@ -19,6 +19,7 @@ dependencies:
   - Pillow
   - scikit-image
   - streamlit
+  - pip
   - pip:
     - pystac_client
     - planetary_computer
