@@ -1,7 +1,6 @@
 import streamlit as st
 import geopandas as gpd
 import pandas as pd
-import random
 import shapely
 import os
 import pystac
@@ -30,7 +29,7 @@ def load_data():
             - maus_gdf (GeoDataFrame): Maus dataset.
             - tang_gdf (GeoDataFrame): Tang dataset.
             - stac_reader (ReadSTAC): STAC reader.
-            - dataset (GeoDataFrame): Dataset.
+            - dataset (GeoDataFrame): Final Dataset containing the accepted polygons.
     """
     mining_area_tiles = gpd.read_file(MINING_AREAS)
 
@@ -116,16 +115,38 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
     # Create a Map
     m = leafmap.Map(center=[tile_geometry.centroid.y, tile_geometry.centroid.x], zoom=2)
 
+    # optionally add high resolution satellite imagery and toggle it off by default
+    with st.sidebar:
+        if st.checkbox("Add Google High-Res Satellite Imagery", key="satellite", value=False):
+            m.add_basemap("SATELLITE")
+
     m.add_cog_layer(url)
     
     # visualize the tile boundaries
-    m.add_gdf(tile, layer_name="tile", fill_color="blue", fill_opacity=0.1)
+    style_tile = {
+        "stroke": True,
+        "color": "orange",
+        "weight": 2,
+        "opacity": 1,
+        "fill": False,
+    }
+    m.add_gdf(tile, layer_name="tile", fill_color="blue", fill_opacity=0.1, style=style_tile)
 
     # Filter the polygons that are included 
     maus_gdf_filtered = maus_gdf.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
     tang_gdf_filtered = tang_gdf.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
 
-    style = {
+    style_maus = {
+        "stroke": True,
+        "color": "blue",
+        "weight": 2,
+        "opacity": 1,
+        "fill": True,
+        "fillColor": "blue",
+        "fillOpacity": 0.1,
+    }
+
+    style_tang = {
         "stroke": True,
         "color": "red",
         "weight": 2,
@@ -137,16 +158,16 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
 
     # Display the polygons
     if not maus_gdf_filtered.empty:
-        m.add_gdf(maus_gdf_filtered, layer_name="maus_gdf")
+        m.add_gdf(maus_gdf_filtered, layer_name="maus_gdf", style=style_maus)
     if not tang_gdf_filtered.empty:
-        m.add_gdf(tang_gdf_filtered, layer_name="tang_gdf", style=style)
+        m.add_gdf(tang_gdf_filtered, layer_name="tang_gdf", style=style_tang)
 
     m.to_streamlit()
 
     return maus_gdf_filtered, tang_gdf_filtered, s2_tile_id
 
 
-def accept_polygons(tile, accepted_polygons, accepted_source_dataset, S2_tile_name, dataset):
+def accept_polygons(tile, accepted_polygons, accepted_source_dataset, S2_tile_name):
     """
     Accept polygons for training a mine segmentation model.
 
@@ -163,8 +184,8 @@ def accept_polygons(tile, accepted_polygons, accepted_source_dataset, S2_tile_na
     # Get the tile id
     tile_id = tile.index[0]
 
-    # Get the tile bbox
-    tile_bbox = tile['geometry'].values[0].bounds
+    # Get the tile bbox as geojson
+    tile_geojson = shapely.geometry.mapping(tile['geometry'].values[0])
 
     # Get the sentinel 2 id
     sentinel_2_id = S2_tile_name
@@ -174,11 +195,13 @@ def accept_polygons(tile, accepted_polygons, accepted_source_dataset, S2_tile_na
 
     accepted_polygons_gdf = gpd.GeoDataFrame([{
         "tile_id": tile_id,
-        "tile_bbox": tile_bbox,
+        "tile_bbox": tile_geojson,
         "sentinel_2_id": sentinel_2_id,
         "geometry": accepted_multipolygon, 
         "source_dataset": accepted_source_dataset
     }], crs="EPSG:4326")
+
+    dataset = gpd.read_file(DATASET)
 
     # Concatenate the dataset with the new row
     dataset = pd.concat([dataset, accepted_polygons_gdf], ignore_index=True)
@@ -190,7 +213,7 @@ def main():
     """
     Main function to run the Mine Segmentation App.
     """
-    st.title('Mine Segmentation App')
+    st.title('Mine Area Mask Selection App')
     st.text("""
         This app allows you to accept or reject polygons for training a mine segmentation model. 
         Data Sources:
@@ -202,7 +225,8 @@ def main():
     mining_area_tiles, maus_gdf, tang_gdf, stac_reader, dataset = load_data()
 
     # Add a streamlit radio button for selecting the year
-    year = st.radio("Select Year", list(range(2016, 2023)), index=3)
+    with st.sidebar:
+        year = st.radio("Select Year", list(range(2016, 2023)), index=3)
 
     # Get a random tile if not already selected
     if "tile" not in st.session_state:
@@ -212,7 +236,7 @@ def main():
     maus_gdf_filtered, tang_gdf_filtered, s2_tile_id = visualize_tile(st.session_state.tile, maus_gdf, tang_gdf, stac_reader, year)
 
     # Create a layout with 4 columns
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
 
     # Add a button to refresh the tile in the first column
     with col1:
@@ -220,32 +244,38 @@ def main():
             # Get a random tile
             new_tile = get_random_tile(mining_area_tiles)
             st.session_state.tile = new_tile
-                    
+
     # Add buttons for accepting maus and tang polygons in the second and third columns
     with col2:
         if st.button(":blue-background[Accept Maus]", key="maus"):
-            dataset = accept_polygons(st.session_state.tile, maus_gdf_filtered, "maus", s2_tile_id, dataset)
+            dataset = accept_polygons(st.session_state.tile, maus_gdf_filtered, "maus", s2_tile_id)
+            # save dataset to file
+            dataset.to_file(DATASET, driver="GPKG")
             st.success("Polygons by Maus (blue) accepted successfully")
+
     with col3:
         if st.button(":red-background[Accept Tang]", key="tang"):
-            dataset = accept_polygons(st.session_state.tile, tang_gdf_filtered, "tang", s2_tile_id, dataset)
+            dataset = accept_polygons(st.session_state.tile, tang_gdf_filtered, "tang", s2_tile_id)
+            # save dataset to file
+            dataset.to_file(DATASET, driver="GPKG")
             st.success("Polygons by Tang (red) accepted successfully")
 
-    # Save the dataset
-    with col4:
-        if st.button("Save Dataset", key="save"):
-            dataset.to_file(DATASET, driver="GPKG")
-            st.success("Dataset saved successfully")
+    # Add section separator
+    st.write("---")
 
-    # Undo button deleting the last row
-    if st.button("Undo", key="undo"):
-        dataset = dataset.iloc[:-1]
-        st.warning("Last row deleted")
-        
-    # Display the dataset
-    st.write(dataset)
+    col1, col2 = st.columns(2)
 
+    with col2:
+        # Undo button deleting the last row
+        if st.button("Undo", key="undo"):
+            dataset_copy = gpd.read_file(DATASET)
+            dataset_copy = dataset_copy.iloc[:-1]
+            dataset_copy.to_file(DATASET, driver="GPKG")
+            st.warning("Last row deleted")
 
+    # Display the last 10 rows of the dataset
+    dataset_copy = gpd.read_file(DATASET)
+    st.write(dataset_copy.tail(10))
 
 if __name__ == "__main__":
     main()
