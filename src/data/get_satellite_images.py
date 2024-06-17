@@ -13,7 +13,7 @@ import os
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-import leafmap
+import leafmap.leafmap as leafmap
 import shapely
 import warnings
 
@@ -80,13 +80,38 @@ class ReadSTAC():
         return bbox_transformed
 
     def select_item_w_largest_overlap(self, items): 
-
         largest_overlap_area = 0
         selected_item = None
 
         for item in items:
             item_geometry = shapely.geometry.shape(item.geometry)  
             bbox_geometry = shapely.geometry.box(*self.bbox)  
+
+            # Calculate the intersection area
+            intersection_area = item_geometry.intersection(bbox_geometry).area
+            
+            # Check if this item has the largest overlap so far
+            if intersection_area > largest_overlap_area:
+                largest_overlap_area = intersection_area
+                selected_item = item
+
+        return selected_item
+
+    def select_items_w_full_overlap(self, items): 
+        """
+        Select the items that fully overlap with the bounding box.
+
+        Parameters:
+        - items (): The items to select from.
+
+        Returns:
+        - selected_item (pystac.item.Item | ): The selected items
+        """
+        selected_item = None
+        bbox_geometry = shapely.geometry.box(*self.bbox)  
+
+        for item in items:
+            item_geometry = shapely.geometry.shape(item.geometry)  
 
             # Calculate the intersection area
             intersection_area = item_geometry.intersection(bbox_geometry).area
@@ -218,6 +243,7 @@ class ReadSTAC():
         self, 
         items: pystac.item_collection.ItemCollection, 
         filter_by: str,
+        full_overlap: bool = False,
         take_best_n: int = 1,
     ) -> pystac.item_collection.ItemCollection | pystac.item.Item:
         """
@@ -228,12 +254,17 @@ class ReadSTAC():
         Parameters:
         - items (pystac.item_collection.ItemCollection): The items to filter.
         - filter_by (str): one of ['most_recent', 'least_cloudy']. 
+        - full_overlap (bool): Whether to only keep items that fully overlap with the bounding box. Default is False.
         - take_best_n (int): The number of best items to take. Default is 1.
 
         Returns:
         - item (pystac.item_collection.ItemCollection | pystac.item.Item): The filtered items.
         """
+        # Optionally filter for items that fully overlap with the bounding box
+        if full_overlap:
+            items = [item for item in items if shapely.geometry.shape(item.geometry).contains(shapely.geometry.box(*self.bbox))]
 
+        # Filter items by unique tile/orbit points
         unique_tile_ids = set([item.properties["unique_tile_identifier"] for item in items])
         print(f"Found {len(unique_tile_ids)} unique tile ids.")
 
