@@ -9,9 +9,6 @@ from src.data.get_satellite_images import ReadSTAC
 
 import leafmap.foliumap as leafmap
 
-sys.path.append("..")
-
-
 MINING_AREAS = "data/interim/mining_areas.gpkg"
 MAUS_POLYGONS = "data/external/maus_mining_polygons.gpkg"
 TANG_POLYGONS = "data/external/tang_mining_polygons/74548_mine_polygons/74548_projected.shp"
@@ -61,19 +58,21 @@ def load_data():
     return mining_area_tiles, maus_gdf, tang_gdf, stac_reader, dataset
 
 
-def get_random_tile(mining_area_tiles):
+def set_random_tile():
     """
     Get a random mining tile.
-
-    Args:
-        mining_area_tiles (GeoDataFrame): Mining area tiles.
 
     Returns:
         GeoDataFrame: Random mining tile.
     """
-    # Sample a random mining tile
+    # Refresh the tile
+    mining_area_tiles = gpd.read_file(MINING_AREAS)
     random_tile = mining_area_tiles.sample(n=1)
-    return random_tile
+    st.session_state.tile = random_tile
+
+    # Reset the year to 2019
+    st.session_state.year = 2019
+
 
 
 def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
@@ -104,7 +103,8 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
     if len(items) < 1: 
         st.error("No S2 images found for this tile. Please refresh the tile.")
 
-    least_cloudy_item = stac_reader.filter_item(items, "least_cloudy")
+    # Get the least cloudy images
+    least_cloudy_item = stac_reader.filter_item(items, "least_cloudy", full_overlap = True)
 
     if isinstance(least_cloudy_item, pystac.ItemCollection):
         least_cloudy_item = least_cloudy_item[0]
@@ -113,14 +113,14 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
     s2_tile_id = least_cloudy_item.id
     
     # Create a Map
-    m = leafmap.Map(center=[tile_geometry.centroid.y, tile_geometry.centroid.x], zoom=2)
+    m = leafmap.Map(center=[tile_geometry.centroid.y, tile_geometry.centroid.x], zoom=10)
 
     # optionally add high resolution satellite imagery and toggle it off by default
     with st.sidebar:
         if st.checkbox("Add Google High-Res Satellite Imagery", key="satellite", value=False):
             m.add_basemap("SATELLITE")
 
-    m.add_cog_layer(url)
+    m.add_cog_layer(url, name="Sentinel-2")
     
     # visualize the tile boundaries
     style_tile = {
@@ -130,11 +130,19 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
         "opacity": 1,
         "fill": False,
     }
-    m.add_gdf(tile, layer_name="tile", fill_color="blue", fill_opacity=0.1, style=style_tile)
+    m.add_gdf(tile, layer_name="tile_bbox", style=style_tile)
 
     # Filter the polygons that are included 
     maus_gdf_filtered = maus_gdf.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
     tang_gdf_filtered = tang_gdf.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
+
+    # Crop the multipolygon to the tile bbox
+    maus_gdf_filtered["geometry"] = maus_gdf_filtered["geometry"].apply(lambda x: x.intersection(tile_geometry))
+    tang_gdf_filtered["geometry"] = tang_gdf_filtered["geometry"].apply(lambda x: x.intersection(tile_geometry))
+
+    # Check that all are of type polygon and not multipolygon
+    maus_gdf_filtered = maus_gdf_filtered[maus_gdf_filtered["geometry"].apply(lambda x: x.geom_type == "Polygon")]
+    tang_gdf_filtered = tang_gdf_filtered[tang_gdf_filtered["geometry"].apply(lambda x: x.geom_type == "Polygon")]
 
     style_maus = {
         "stroke": True,
@@ -167,7 +175,7 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
     return maus_gdf_filtered, tang_gdf_filtered, s2_tile_id
 
 
-def accept_polygons(tile, accepted_polygons, accepted_source_dataset, S2_tile_name):
+def accept_polygons(accepted_polygons, accepted_source_dataset, S2_tile_name):
     """
     Accept polygons for training a mine segmentation model.
 
@@ -181,6 +189,8 @@ def accept_polygons(tile, accepted_polygons, accepted_source_dataset, S2_tile_na
     Returns:
         GeoDataFrame: Updated dataset.
     """
+    tile = st.session_state.tile 
+
     # Get the tile id
     tile_id = tile.index[0]
 
@@ -189,6 +199,9 @@ def accept_polygons(tile, accepted_polygons, accepted_source_dataset, S2_tile_na
 
     # Get the sentinel 2 id
     sentinel_2_id = S2_tile_name
+
+    # Fix any potential issues with the polygons (e.g. self-intersections)
+    # accepted_polygons["geometry"] = accepted_polygons.buffer(0)
 
     # convert accepted polygons to a multipolygon
     accepted_multipolygon = shapely.geometry.MultiPolygon(accepted_polygons['geometry'].values)
@@ -209,9 +222,14 @@ def accept_polygons(tile, accepted_polygons, accepted_source_dataset, S2_tile_na
     return dataset
 
 
+##################
+# Main interface #
+##################
+
+
 def main():
     """
-    Main function to run the Mine Segmentation App.
+    Main function to run the Mine Area Mask Selection App.
     """
     st.title('Mine Area Mask Selection App')
     st.text("""
@@ -224,58 +242,78 @@ def main():
     # Load data
     mining_area_tiles, maus_gdf, tang_gdf, stac_reader, dataset = load_data()
 
-    # Add a streamlit radio button for selecting the year
-    with st.sidebar:
-        year = st.radio("Select Year", list(range(2016, 2023)), index=3)
-
     # Get a random tile if not already selected
     if "tile" not in st.session_state:
-        st.session_state.tile = get_random_tile(mining_area_tiles)
+        set_random_tile()
+
+    # Add a streamlit radio button for selecting the year
+    with st.sidebar:
+        st.radio("Select Year", list(range(2016, 2023)), index=3, key="year")
+
+    st.button("Refresh Tile", on_click=set_random_tile)
+
+    # Display the tile dataframe
+    st.dataframe(pd.DataFrame(st.session_state.tile.drop(columns="geometry")))
 
     # Visualize the tile
-    maus_gdf_filtered, tang_gdf_filtered, s2_tile_id = visualize_tile(st.session_state.tile, maus_gdf, tang_gdf, stac_reader, year)
+    maus_gdf_filtered, tang_gdf_filtered, s2_tile_id = visualize_tile(st.session_state.tile, maus_gdf, tang_gdf, stac_reader, st.session_state.year)
 
-    # Create a layout with 4 columns
-    col1, col2, col3 = st.columns(3)
+    # # Display the map
+    # m.to_streamlit()
+    
+    # # Get the custom polygon from the leafmap 
+    # m.save_draw_features("streamlit_app/data/custom_features.geojson")
 
-    # Add a button to refresh the tile in the first column
+    # Create layout
+    col1, col2,  = st.columns(2)
+
     with col1:
-        if st.button("Refresh Tile", key="refresh"):
-            # Get a random tile
-            new_tile = get_random_tile(mining_area_tiles)
-            st.session_state.tile = new_tile
-
-    # Add buttons for accepting maus and tang polygons in the second and third columns
-    with col2:
         if st.button(":blue-background[Accept Maus]", key="maus"):
-            dataset = accept_polygons(st.session_state.tile, maus_gdf_filtered, "maus", s2_tile_id)
+            dataset = accept_polygons(maus_gdf_filtered, "maus", s2_tile_id)
             # save dataset to file
             dataset.to_file(DATASET, driver="GPKG")
             st.success("Polygons by Maus (blue) accepted successfully")
 
-    with col3:
+    with col2:
         if st.button(":red-background[Accept Tang]", key="tang"):
-            dataset = accept_polygons(st.session_state.tile, tang_gdf_filtered, "tang", s2_tile_id)
+            dataset = accept_polygons(tang_gdf_filtered, "tang", s2_tile_id)
             # save dataset to file
             dataset.to_file(DATASET, driver="GPKG")
             st.success("Polygons by Tang (red) accepted successfully")
 
+    # with col3:
+    #     if st.button("Accept custom", key="custom"):
+    #         # Get the custom polygon from the leafmap 
+    #         m.save_draw_features("streamlit_app/data/custom_features.geojson")
+            
+    #         # read the file
+    #         gdf = gpd.read_file("streamlit_app/data/custom_features.geojson")
+
+    #         # Ensure that the custom polygon is in the same CRS as the tile
+    #         custom_gdf = gdf.to_crs(st.session_state.tile.crs)
+
+    #         # Ensure that the custom polygon is within the tile by taking the intersection
+    #         custom_gdf["geometry"] = custom_gdf["geometry"].apply(lambda x: x.intersection(st.session_state.tile['geometry'].values[0]))
+
+    #         dataset = accept_polygons(st.session_state.tile, custom_gdf, "custom", s2_tile_id)
+    #         # save dataset to file
+    #         dataset.to_file(DATASET, driver="GPKG")
+    #         st.success("Custom polygons accepted successfully")
+
     # Add section separator
     st.write("---")
 
-    col1, col2 = st.columns(2)
-
-    with col2:
-        # Undo button deleting the last row
-        if st.button("Undo", key="undo"):
-            dataset_copy = gpd.read_file(DATASET)
-            dataset_copy = dataset_copy.iloc[:-1]
-            dataset_copy.to_file(DATASET, driver="GPKG")
-            st.warning("Last row deleted")
+    # Undo button deleting the last row
+    if st.button("Undo: Delete last Row", key="undo"):
+        dataset_copy = gpd.read_file(DATASET)
+        dataset_copy = dataset_copy.iloc[:-1]
+        dataset_copy.to_file(DATASET, driver="GPKG")
+        st.warning("Last row deleted")
 
     # Display the last 10 rows of the dataset
-    dataset_copy = gpd.read_file(DATASET)
-    st.write(dataset_copy.tail(10))
+    dataset_copy = gpd.read_file(DATASET).tail(10)
+    dataset_copy['str_geom'] = dataset_copy['geometry'].apply(shapely.wkt.dumps)
+    st.dataframe(dataset_copy.drop(columns="geometry"))
 
 if __name__ == "__main__":
     main()
