@@ -28,8 +28,6 @@ def load_data():
             - stac_reader (ReadSTAC): STAC reader.
             - dataset (GeoDataFrame): Final Dataset containing the accepted polygons.
     """
-    mining_area_tiles = gpd.read_file(MINING_AREAS)
-
     # Load Maus dataset
     maus_gdf = gpd.read_file(MAUS_POLYGONS)
 
@@ -55,7 +53,7 @@ def load_data():
         data_dir="streamlit_app/data"
     )
 
-    return mining_area_tiles, maus_gdf, tang_gdf, stac_reader, dataset
+    return maus_gdf, tang_gdf, stac_reader, dataset
 
 
 def set_random_tile():
@@ -93,6 +91,13 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
     tile_geometry = tile['geometry'].values[0]
 
     bbox = tile_geometry.bounds
+
+    # print the tile pixel extent in kilometers
+    x0, y0, x1, y1 = bbox
+    dx = (x1 - x0) * 111.32
+    dy = (y1 - y0) * 111.32
+    st.write(f"Tile extent: {dx:.2f} km x {dy:.2f} km")
+    
     # get the least cloudy sentinel image for the tile
     items = stac_reader.get_items(
         bbox=bbox,
@@ -240,7 +245,7 @@ def main():
     """)
 
     # Load data
-    mining_area_tiles, maus_gdf, tang_gdf, stac_reader, dataset = load_data()
+    maus_gdf, tang_gdf, stac_reader, dataset = load_data()
 
     # Get a random tile if not already selected
     if "tile" not in st.session_state:

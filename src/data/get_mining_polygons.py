@@ -8,6 +8,13 @@ import shutil
 URL_MAUS = "https://download.pangaea.de/dataset/942325/files/global_mining_polygons_v2.gpkg"
 URL_MAUS_RASTER = "https://download.pangaea.de/dataset/942325/files/global_miningarea_v2_5arcminute.tif"
 URL_TANG = "https://zenodo.org/records/6806817/files/Supplementary%201%EF%BC%9Amine%20area%20polygons.rar?download=1"
+URL_MGRS = "https://mgrs-data.org/data/mgrs_index_ftp_link.zip"
+
+maus_file_path = "data/external/maus_mining_polygons.gpkg"
+maus_raster_file_path = "data/external/maus_mining_raster.tif"
+tang_file_path = "data/external/tang_mining_polygons.rar"
+mgrs_file_path = "data/external/mgrs_index_ftp_link.zip"
+
 
 def download_file(url, file_path):
     response = requests.get(url)
@@ -25,38 +32,37 @@ def extract_rar(file_path, extract_path):
     except subprocess.CalledProcessError as e:
         print(f"Error occurred while extracting {file_path}: {str(e)}")
 
-def download_and_extract(url, file_path, extract_path):
-    download_file(url, file_path)
-    if file_path.endswith(".rar"):
-        extract_rar(file_path, extract_path)
-        
+def extract_zip(file_path, extract_path):
+    try:
+        shutil.unpack_archive(file_path, extract_path)
+    except Exception as e:
+        print(f"Error occurred while extracting {file_path}: {str(e)}")
+
+def download_and_extract(url, file_path, extract_path = None):
+    if not os.path.exists(file_path):
+        print(f"File {file_path} does not exist yet, starting download...")
+        download_file(url, file_path)
+        if file_path.endswith(".rar"):
+            extract_rar(file_path, extract_path)
+        elif file_path.endswith(".zip"):
+            extract_zip(file_path, extract_path)
+    else:
+        print(f"File {file_path} already exists.")
+
 
 if __name__ == "__main__":
 
-    # Download and extract Maus et al
-    maus_file_path = "data/external/maus_mining_polygons.gpkg"
-    if not os.path.exists(maus_file_path):
-        print(f"File {maus_file_path} does not exist yet, starting download...")
-        download_and_extract(URL_MAUS, maus_file_path, "data/external")
-    else:
-        print(f"File {maus_file_path} already exists.")
+    download_and_extract(URL_MAUS, maus_file_path)
 
-    # Download Maus et al Mining area Raster
-    maus_raster_file_path = "data/external/maus_mining_raster.tif"
-    if not os.path.exists(maus_raster_file_path):
-        print(f"File {maus_raster_file_path} does not exist yet, starting download...")
-        download_file(URL_MAUS_RASTER, maus_raster_file_path)
-    else:
-        print(f"File {maus_raster_file_path} already exists.")
+    download_and_extract(URL_MAUS_RASTER, maus_raster_file_path)
 
-    # Download and extract Tang et al
-    tang_file_path = "data/external/tang_mining_polygons.rar"
-    if not os.path.exists(tang_file_path):
-        print(f"File {tang_file_path} does not exist yet, starting download...")
-        download_and_extract(URL_TANG, tang_file_path, "data/external")
-    else:
-        print(f"File {tang_file_path} already exists.")
+    download_and_extract(URL_TANG, tang_file_path, "data/external")
 
+    download_and_extract(URL_MGRS, mgrs_file_path, "data/external")
+    
+    #########################
+    # Post-processing steps #
+    #########################
 
     # Fix the folder names in Tang's data
     parent_dir = "data/external/tang_mining_polygons"
