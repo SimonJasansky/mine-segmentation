@@ -70,15 +70,17 @@ target/
 .vscode/*
 !.vscode/launch.json
 
-
 # Spyder
 .spyproject/
 
 # Jupyter NB Checkpoints
 .ipynb_checkpoints/
 
-# exclude data from source control by default
-/data/
+# Ignore everything under data
+data/*
+!data/raw/
+data/raw/*
+!data/raw/mining_tiles_with_masks.gpkg
 
 # Mac OS-specific storage files
 .DS_Store
