@@ -2,9 +2,12 @@ import streamlit as st
 import geopandas as gpd
 import pandas as pd
 import shapely
+from shapely.ops import transform
+from functools import partial
 import os
 import pystac
-import sys
+import pyproj
+
 from src.data.get_satellite_images import ReadSTAC
 
 import leafmap.foliumap as leafmap
@@ -12,7 +15,7 @@ import leafmap.foliumap as leafmap
 MINING_AREAS = "data/interim/mining_areas.gpkg"
 MAUS_POLYGONS = "data/external/maus_mining_polygons.gpkg"
 TANG_POLYGONS = "data/external/tang_mining_polygons/74548_mine_polygons/74548_projected.shp"
-DATASET = "data/interim/mining_tiles_with_masks.gpkg"
+DATASET = "data/raw/mining_tiles_with_masks.gpkg"
 
 # Load data
 @st.cache_data
@@ -42,8 +45,11 @@ def load_data():
         dataset = gpd.read_file(DATASET)
     else:
         # Create the dataset
-        columns = ["tile_id", "tile_bbox", "sentinel_2_id", "geometry", "source_dataset"]
+        columns = ["tile_id", "tile_bbox", "sentinel_2_id", "geometry", "source_dataset", "timestamp"]
         dataset = gpd.GeoDataFrame(columns=columns)
+
+        # write to file
+        dataset.to_file(DATASET, driver="GPKG")
 
     # Initialize the STAC reader
     api_url="https://planetarycomputer.microsoft.com/api/stac/v1"
@@ -53,7 +59,9 @@ def load_data():
         data_dir="streamlit_app/data"
     )
 
-    return maus_gdf, tang_gdf, stac_reader, dataset
+    mining_area_tiles = gpd.read_file(MINING_AREAS)
+
+    return maus_gdf, tang_gdf, stac_reader, dataset, mining_area_tiles
 
 
 def set_random_tile():
@@ -65,11 +73,51 @@ def set_random_tile():
     """
     # Refresh the tile
     mining_area_tiles = gpd.read_file(MINING_AREAS)
+    dataset = gpd.read_file(DATASET)
+
+    # take only tiles that are not yet in the dataset
+    mining_area_tiles = mining_area_tiles[~mining_area_tiles.index.isin(dataset["tile_id"].values)]
     random_tile = mining_area_tiles.sample(n=1)
+
     st.session_state.tile = random_tile
 
     # Reset the year to 2019
     st.session_state.year = 2019
+
+def calculate_dimensions_km(polygon):
+    """
+    Calculate the dimensions (width, height) in kilometers of a given polygon.
+    
+    Parameters:
+    - polygon: A shapely Polygon object.
+    
+    Returns:
+    - A tuple (width_km, height_km) representing the dimensions in kilometers.
+    """
+    # Define the projection to UTM (Universal Transverse Mercator)
+    # Find UTM zone for the centroid of the polygon for more accuracy
+    utm_zone = int((polygon.centroid.x + 180) / 6) + 1
+    crs_proj = pyproj.Proj(proj='utm', zone=utm_zone, ellps='WGS84', preserve_units=False)
+    
+    # Define transformations from WGS84 to UTM and back
+    project_to_utm = partial(pyproj.transform, pyproj.Proj(init='epsg:4326'), crs_proj)
+    project_to_wgs84 = partial(pyproj.transform, crs_proj, pyproj.Proj(init='epsg:4326'))
+    
+    # Transform the polygon to the UTM projection
+    polygon_utm = transform(project_to_utm, polygon)
+    
+    # Calculate bounds in UTM
+    minx, miny, maxx, maxy = polygon_utm.bounds
+    
+    # Calculate width and height in meters
+    width_m = maxx - minx
+    height_m = maxy - miny
+    
+    # Convert meters to kilometers
+    width_km = width_m / 1000
+    height_km = height_m / 1000
+    
+    return (width_km, height_km)
 
 
 
@@ -92,21 +140,28 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
 
     bbox = tile_geometry.bounds
 
-    # print the tile pixel extent in kilometers
-    x0, y0, x1, y1 = bbox
-    dx = (x1 - x0) * 111.32
-    dy = (y1 - y0) * 111.32
-    st.write(f"Tile extent: {dx:.2f} km x {dy:.2f} km")
-    
+    # create three columns
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        # Display the tile dataframe
+        st.dataframe(pd.DataFrame(tile.drop(columns="geometry")))
+
+    with col2:
+        # project the tile, and calculate the extent
+        width_km, height_km = calculate_dimensions_km(tile_geometry)
+        st.write(f"Tile extents: {width_km:.2f} km x {height_km:.2f} km")
+
+
     # get the least cloudy sentinel image for the tile
     items = stac_reader.get_items(
         bbox=bbox,
         timerange=f'{year}-01-01/{year}-12-31',
-        max_cloud_cover=10
+        max_cloud_cover=15
     )
 
     if len(items) < 1: 
-        st.error("No S2 images found for this tile. Please refresh the tile.")
+        st.error("No S2 images found for this tile. Please refresh the tile or change to another year.")
 
     # Get the least cloudy images
     least_cloudy_item = stac_reader.filter_item(items, "least_cloudy", full_overlap = True)
@@ -114,6 +169,10 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
     if isinstance(least_cloudy_item, pystac.ItemCollection):
         least_cloudy_item = least_cloudy_item[0]
 
+    with col3:
+        # Display the cloud coverage
+        st.write(f"Cloud coverage: {least_cloudy_item.properties['eo:cloud_cover']}%")
+    
     url = least_cloudy_item.assets["visual"].href
     s2_tile_id = least_cloudy_item.id
     
@@ -216,7 +275,8 @@ def accept_polygons(accepted_polygons, accepted_source_dataset, S2_tile_name):
         "tile_bbox": tile_geojson,
         "sentinel_2_id": sentinel_2_id,
         "geometry": accepted_multipolygon, 
-        "source_dataset": accepted_source_dataset
+        "source_dataset": accepted_source_dataset,
+        "timestamp": pd.Timestamp.now()
     }], crs="EPSG:4326")
 
     dataset = gpd.read_file(DATASET)
@@ -244,8 +304,9 @@ def main():
         - Tang et al: https://zenodo.org/doi/10.5281/zenodo.6806816 
     """)
 
+
     # Load data
-    maus_gdf, tang_gdf, stac_reader, dataset = load_data()
+    maus_gdf, tang_gdf, stac_reader, dataset, mining_area_tiles = load_data()
 
     # Get a random tile if not already selected
     if "tile" not in st.session_state:
@@ -257,9 +318,6 @@ def main():
 
     st.button("Refresh Tile", on_click=set_random_tile)
 
-    # Display the tile dataframe
-    st.dataframe(pd.DataFrame(st.session_state.tile.drop(columns="geometry")))
-
     # Visualize the tile
     maus_gdf_filtered, tang_gdf_filtered, s2_tile_id = visualize_tile(st.session_state.tile, maus_gdf, tang_gdf, stac_reader, st.session_state.year)
 
@@ -270,7 +328,7 @@ def main():
     # m.save_draw_features("streamlit_app/data/custom_features.geojson")
 
     # Create layout
-    col1, col2,  = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         if st.button(":blue-background[Accept Maus]", key="maus"):
@@ -285,6 +343,17 @@ def main():
             # save dataset to file
             dataset.to_file(DATASET, driver="GPKG")
             st.success("Polygons by Tang (red) accepted successfully")
+
+    with col3:
+        # Reject the tile and the polygons
+        if st.button(":x: Reject Tile", key="reject"):
+            # combine maus and tang polygons
+            all_polygons = gpd.GeoDataFrame(pd.concat([maus_gdf_filtered, tang_gdf_filtered], ignore_index=True))
+
+            dataset = accept_polygons(all_polygons, "rejected", s2_tile_id)
+            # save dataset to file
+            dataset.to_file(DATASET, driver="GPKG")
+            st.success("Tile and polygons rejected successfully")
 
     # with col3:
     #     if st.button("Accept custom", key="custom"):
@@ -316,9 +385,16 @@ def main():
         st.warning("Last row deleted")
 
     # Display the last 10 rows of the dataset
-    dataset_copy = gpd.read_file(DATASET).tail(10)
+    dataset_copy = gpd.read_file(DATASET)
     dataset_copy['str_geom'] = dataset_copy['geometry'].apply(shapely.wkt.dumps)
     st.dataframe(dataset_copy.drop(columns="geometry"))
+
+    # Add progress bar for the dataset
+    n_tiles_reviewed = len(dataset_copy)
+    n_tiles_to_review = len(mining_area_tiles)
+    st.write(f"Progress: {n_tiles_reviewed}/{n_tiles_to_review} tiles reviewed.",
+            f"{n_tiles_reviewed / n_tiles_to_review:.2%} completed.")
+    st.progress(n_tiles_reviewed / n_tiles_to_review)
 
 if __name__ == "__main__":
     main()
