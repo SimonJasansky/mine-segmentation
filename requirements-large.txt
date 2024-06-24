@@ -1,3 +1,0 @@
-# Optionally also install large libraries
-segment-geospatial
-groundingdino-py 

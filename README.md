@@ -5,19 +5,42 @@ This project aims to automate the semantic segmentation of mining areas in satel
 
 # Installation
 
-## Using Docker
+## Environments
+The project uses external models, which means you need to set up different environments. You can use Conda or Mamba to manage the environments. There are three YAML files available for different environments:
+- ``environment.yml`` (base)
+- ``environment-clay.yml`` (for using the [Clay model](https://github.com/Clay-foundation/model))
+- ``environment-samgeo.yml`` (for using the [segment-geospatial model](https://github.com/opengeos/segment-geospatial))
 
-## On Lightning Studio
+ To install the right environment, follow these steps:
 
-Update the conda environment with: 
+1. Open a terminal or command prompt.
+2. Navigate to the project's root directory.
+3. Run the following command to install the environment:
 ```bash
-conda env update --name myenv --file environment.yml --prune
+mamba create --name myenv --file environment.yml
 ```
+or to update an existing conda environment: 
 
-Additionally, you have to install `unrar` using `apt-get`: 
+```bash
+conda env update --name myenv --file environments/environment.yml --prune
+```
+Make sure to replace `myenv` with the desired name for your environment.
+
+4. Additionally, you have to install `unrar` using `apt-get`: 
 ```bash
 sudo apt-get install unrar
 ```
+
+## Initializing Submodules
+
+After cloning the repository, you need to initialize and update the submodules, including the external model repository (Clay). To do this, run the following commands in the root directory of the project:
+
+```bash
+git submodule init
+git submodule update
+```
+
+These commands will fetch and update the contents of the `clay` submodule directory based on the commit specified in the main project.
 
 # Running the streamlit app for producing the source dataset
 
@@ -25,7 +48,6 @@ Run the following from the `mine-segmentation` directory:
 ```bash
 streamlit run streamlit_app/app.py
 ```
-
 
 # Project Organization
 ------------
@@ -37,21 +59,18 @@ streamlit run streamlit_app/app.py
     │   ├── external       <- Data from third party sources.
     │   ├── interim        <- Intermediate data that has been transformed.
     │   ├── processed      <- The final, canonical data sets for modeling.
-    │   └── raw            <- The original, immutable data dump.
+    │   └── raw            <- The original, immutable data dump, including the manually produced dataset.
     │
     ├── docs               <- A default Sphinx project; see sphinx-doc.org for details
     │
     ├── models             <- Trained and serialized models, model predictions, or model summaries
     │
-    ├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
-    │                         the creator's initials, and a short `-` delimited description, e.g.
-    │                         `1.0-jqp-initial-data-exploration`.
+    ├── notebooks          <- Jupyter notebooks.
     │
     ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
     │   └── figures        <- Generated graphics and figures to be used in reporting
     │
-    ├── requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
-    │                         generated with `pip freeze > requirements.txt`
+    |── environments       <- environment.yml files
     │
     ├── setup.py           <- makes project pip installable (pip install -e .) so src can be imported
     ├── src                <- Source code for use in this project.

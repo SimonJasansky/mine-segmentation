@@ -1,0 +1,32 @@
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  # base
+  - rasterio
+  - rioxarray
+  - stackstac
+  - geopandas
+  - shapely
+  - leafmap
+  - ipykernel
+  - jupyter-server-proxy
+  - localtileserver
+  - numpy
+  - requests
+  - pandas
+  - matplotlib
+  - Pillow
+  - scikit-image
+  - seaborn
+  - streamlit
+  - flask
+  - flask-restx
+  - pip
+  # samgeo
+  - segment-geospatial
+  - groundingdino-py
+  - pip:
+    # base
+    - pystac_client
+    - planetary_computer

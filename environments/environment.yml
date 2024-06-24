@@ -1,8 +1,8 @@
-name: cloudspace
 channels:
   - conda-forge
   - defaults
 dependencies:
+  # base
   - rasterio
   - rioxarray
   - stackstac
@@ -20,9 +20,10 @@ dependencies:
   - scikit-image
   - seaborn
   - streamlit
-  - flask 
+  - flask
   - flask-restx
   - pip
   - pip:
+    # base
     - pystac_client
     - planetary_computer
