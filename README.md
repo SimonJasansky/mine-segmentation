@@ -5,6 +5,16 @@ This project aims to automate the semantic segmentation of mining areas in satel
 
 # Installation
 
+## Docker
+TODO
+
+## Setting the PYTHONPATH
+To ensure relative imports work as expected, we can set the pythonpath manually. That's a bit of a hacky solution, but works for now. 
+
+```bash
+export PYTHONPATH="${PYTHONPATH}:/workspaces/mine-segmentation"
+```
+
 ## Environments
 The project uses external models, which means you need to set up different environments. You can use Conda or Mamba to manage the environments. There are three YAML files available for different environments:
 - ``environment.yml`` (base)
@@ -41,6 +51,17 @@ git submodule update
 ```
 
 These commands will fetch and update the contents of the `clay` submodule directory based on the commit specified in the main project.
+
+## Lightning Studios
+
+To set up the repo in a Lightning Studio, do this before proceeding with the installation as detailed above: 
+
+1. Clone the repo into `this_studio/workspaces`. This ensures that most hardcoded paths are compatible with how the paths are inside the Docker devcontainer. 
+2. Add the following to the `on_start.sh` file:
+```bash
+cd workspaces/mine-segmentation
+code -r .
+```
 
 # Running the streamlit app for producing the source dataset
 
