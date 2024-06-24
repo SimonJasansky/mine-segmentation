@@ -122,12 +122,47 @@ class ReadSTAC():
                 selected_item = item
 
         return selected_item
-    
 
     #####################
     ### Read STAC API ###
     #####################
 
+    def get_item_by_name(
+        self,
+        item_name: str, 
+        location: list = None,
+        timerange: str = None,
+        max_cloud_cover: int = None,
+        bbox: list = None,       
+    ) -> pystac.item.Item: 
+        """
+        Query the STAC API for a specific item by name.
+
+        Parameters:
+        - item_name (str): The name of the item to query. Example: S2B_MSIL2A_20240610T141719_R010_T21QZB_20240610T171009
+        - location (list, optional): Coordinates of desired location. Format [longitude, latitude], using WGS84.
+        - timerange (str, optional): The desired time range in the format "start_date/end_date".
+        - max_cloud_cover (int, optional): The maximum cloud cover percentage.
+        - bbox (list, optional): The bounding box in the form [minx, miny, maxx, maxy].
+
+        Returns:
+        - item (pystac.item.Item): The queried item.
+        """
+        item_url = f"{self.api_url}/collections/{self.collection}/items/{item_name}"
+
+        # Load the individual item metadata and sign the assets
+        item = pystac.Item.from_file(item_url)
+
+        # Optionally set properties
+        self.location = location
+        self.timerange = timerange
+        self.max_cloud_cover = max_cloud_cover
+        self.bbox = bbox
+        if self.bbox is not None:
+            self.bbox_geojson = mapping(box(bbox[0], bbox[1], bbox[2], bbox[3]))
+
+        return item
+    
     def get_items(
         self,
         timerange: str,
@@ -171,7 +206,6 @@ class ReadSTAC():
         self.timerange = timerange
         self.max_cloud_cover = max_cloud_cover
         self.bbox = bbox
-
         self.bbox_geojson = bbox_geojson
 
         # Open the STAC API
@@ -306,25 +340,6 @@ class ReadSTAC():
             return pystac.item_collection.ItemCollection(filtered_items)
         
 
-    def query_item_by_name(
-        self,
-        item_name: str,        
-    ) -> pystac.item.Item: 
-        """
-        Query the STAC API for a specific item by name.
-
-        Parameters:
-        - item_name (str): The name of the item to query. Example: S2B_MSIL2A_20240610T141719_R010_T21QZB_20240610T171009
-
-        Returns:
-        - item (pystac.item.Item): The queried item.
-        """
-        item_url = f"{self.api_url}/collections/{self.collection}/items/{item_name}"
-
-        # Load the individual item metadata and sign the assets
-        item = pystac.Item.from_file(item_url)
-
-        return item
 
 
     def preview_item(
@@ -421,7 +436,8 @@ class ReadSTAC():
         print("Loading stack...")
 
         # Filter the items
-        items = self.filter_item(items=items, filter_by=filter_by, take_best_n=take_best_n)
+        if filter_by is not None:
+            items = self.filter_item(items=items, filter_by=filter_by, take_best_n=take_best_n)
         
         # Get Item CRS in case it must be set manually
         if isinstance(items, pystac.item_collection.ItemCollection):
