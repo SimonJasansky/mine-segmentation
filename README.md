@@ -27,14 +27,14 @@ The project uses external models, which means you need to set up different envir
 2. Navigate to the project's root directory.
 3. Run the following command to install the environment:
 ```bash
-mamba create --name myenv --file environment.yml
+conda create --name mineseg-base --file environment.yml
 ```
 or to update an existing conda environment: 
 
 ```bash
-conda env update --name myenv --file environments/environment.yml --prune
+conda env update --name mineseg-base --file environments/environment.yml --prune
 ```
-Make sure to replace `myenv` with the desired name for your environment.
+Make sure to replace `mineseg-base` with the desired name for your environment.
 
 4. Additionally, you have to install `unrar` using `apt-get`: 
 ```bash
@@ -42,8 +42,9 @@ sudo apt-get install unrar
 ```
 
 ## Initializing Submodules
+Currently, the project includes the [Clay model repository](https://github.com/Clay-foundation/model) as a submodule. As the mine-segmentation project relies on the Clay foundation model as one of the models used, having access to the original source code is beneficial during development.
 
-After cloning the repository, you need to initialize and update the submodules, including the external model repository (Clay). To do this, run the following commands in the root directory of the project:
+After cloning the repository, the `clay` folder will be empty, and if you want to have access to the submodule code, you need to initialize and update the submodule. To do this, run the following commands in the root directory of the project:
 
 ```bash
 git submodule init
@@ -56,8 +57,22 @@ These commands will fetch and update the contents of the `clay` submodule direct
 
 To set up the repo in a Lightning Studio, do this before proceeding with the installation as detailed above: 
 
+1. Change the Python version to ``3.12.2``. The default version of ``3.10.10`` (by the time of testing this) caused problems with an import of sqlite3. Additionally, ``3.12.2`` is also the version used in the dev Docker image. Changing Python version can be done on the top right by clicking on "4 CPU". 
 1. Clone the repo into `this_studio/workspaces`. This ensures that most hardcoded paths are compatible with how the paths are inside the Docker devcontainer. 
-2. Add the following to the `on_start.sh` file:
+```bash
+git clone https://github.com/SimonJasansky/mine-segmentation.git workspaces/mine-segmentation
+```
+2. Go to project root directory
+```bash
+cd workspaces/mine-segmentation
+```
+3. Install one of the environments. Here, it is important that in the **command the `--name cloudspace` tag is added**, as Lightning studios only allows one environment (named cloudspace by default). If the `--name cloudspace` flag is not correctly added, conda will try to create a new environment, and Lightning Studios will break. 
+Also, it is **important that the environment.yml file has `name: cloudspace` as the first property**. If not, conda again will try to create a new environment, and Lightning Studios will break. 
+
+```bash
+conda env update --name cloudspace --file environments/environment.yml --prune
+```
+4. Add the following to the `on_start.sh` file:
 ```bash
 cd workspaces/mine-segmentation
 code -r .
@@ -71,6 +86,7 @@ streamlit run streamlit_app/app.py
 ```
 
 # Project Organization
+> 🚧 Project Organization might not be up to date.
 ------------
 
     ├── LICENSE
