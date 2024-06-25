@@ -1,3 +1,4 @@
+name: mineseg-clay
 channels:
   - conda-forge
   - defaults

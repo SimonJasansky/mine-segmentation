@@ -1,3 +1,4 @@
+name: mineseg-base
 channels:
   - conda-forge
   - defaults
