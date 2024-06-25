@@ -412,6 +412,8 @@ class ReadSTAC():
         allow_mosaic: bool = False,
         resolution: int = 10,
         crop_to_bounds: bool = True,
+        squeeze_time_dim: bool = True,
+        chunk_size: int = 1024,
     ) -> xr.DataArray:
         """
         Load a specific item from the STAC API using stackstac. 
@@ -463,9 +465,11 @@ class ReadSTAC():
         stack = stackstac.stack(
             items, 
             resolution=(resolution, resolution), 
+            dtype="float32",
             assets=bands, 
             bounds=bounds, 
-            epsg=item_crs
+            epsg=item_crs,
+            chunksize=chunk_size,
             )
 
         if isinstance(items, pystac.item.Item):
@@ -476,8 +480,9 @@ class ReadSTAC():
         else:
             print("Returning Mosaic of mutliple S2 Images!")
         
-        # In any case, remove the time dimension (would be 1 in case it's a pystac.item.Item)
-        stack = stackstac.mosaic(stack, dim='time').squeeze()
+        if squeeze_time_dim:
+            # remove the time dimension (would be 1 in case it's a pystac.item.Item)
+            stack = stackstac.mosaic(stack, dim='time').squeeze()
 
         return stack
         
