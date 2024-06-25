@@ -7,9 +7,6 @@ MAUS_POLYGONS = "data/external/maus_mining_polygons.gpkg"
 MAUS_AREA_RASTER = "data/external/maus_mining_raster.tif"
 MAUS_AREA_RASTER_DOWNSAMPLED = "data/external/maus_mining_raster_downsampled.tif"
 TANG_POLYGONS = "data/external/tang_mining_polygons/74548_mine_polygons/74548_projected.shp"
-MGRS_TILES = "data/external/mgrs_index_ftp_link/mgrs_index_ftp_link.shp"
-
-from tqdm import tqdm
 
 # Create the downsampled raster
 def resample_geotiff(source_path, dest_path, resampling_factor): 
