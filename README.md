@@ -8,13 +8,6 @@ This project aims to automate the semantic segmentation of mining areas in satel
 ## Docker
 TODO
 
-## Setting the PYTHONPATH
-To ensure relative imports work as expected, we can set the pythonpath manually. That's a bit of a hacky solution, but works for now. 
-
-```bash
-export PYTHONPATH="${PYTHONPATH}:/workspaces/mine-segmentation"
-```
-
 ## Environments
 The project uses external models, which means you need to set up different environments. You can use Conda or Mamba to manage the environments. There are three YAML files available for different environments:
 - ``environment.yml`` (base)
@@ -83,6 +76,13 @@ code -r .
 Run the following from the `mine-segmentation` directory:
 ```bash
 streamlit run streamlit_app/app.py
+```
+
+# Setting the PYTHONPATH
+To ensure relative imports work as expected, we can set the pythonpath manually. That's a bit of a hacky solution, but works for now. 
+
+```bash
+export PYTHONPATH="${PYTHONPATH}:/workspaces/mine-segmentation"
 ```
 
 # Project Organization
