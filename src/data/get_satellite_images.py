@@ -148,10 +148,8 @@ class ReadSTAC():
         Returns:
         - item (pystac.item.Item): The queried item.
         """
-        item_url = f"{self.api_url}/collections/{self.collection}/items/{item_name}"
-
-        # Load the individual item metadata and sign the assets
-        item = pystac.Item.from_file(item_url)
+        item_url = pystac.read_file(f"{self.api_url}/collections/{self.collection}/items/{item_name}")
+        signed_item = planetary_computer.sign(item_url)  # these assets can be accessed
 
         # Optionally set properties
         self.location = location
@@ -161,7 +159,7 @@ class ReadSTAC():
         if self.bbox is not None:
             self.bbox_geojson = mapping(box(bbox[0], bbox[1], bbox[2], bbox[3]))
 
-        return item
+        return signed_item
     
     def get_items(
         self,
@@ -338,8 +336,6 @@ class ReadSTAC():
             return filtered_items[0]
         else:
             return pystac.item_collection.ItemCollection(filtered_items)
-        
-
 
 
     def preview_item(
@@ -412,6 +408,7 @@ class ReadSTAC():
         allow_mosaic: bool = False,
         resolution: int = 10,
         crop_to_bounds: bool = True,
+        custom_point_and_buffer: list = None,
         squeeze_time_dim: bool = True,
         chunk_size: int = 1024,
     ) -> xr.DataArray:
@@ -427,6 +424,9 @@ class ReadSTAC():
         - allow_mosaic (bool, optional): Whether to allow mosaicing of multiple items. Default is false
         - resolution (int, optional): The resolution of the image. Default is 10.
         - crop_to_bounds (bool, optional): Whether to crop the image to the bounding box. Default is True.
+        - custom_point_and_buffer (list, optional): Custom centroid point and buffer [meters] to use for the bounding box, in the form of [longitude, latitude, buffer]. Default is None.
+        - squeeze_time_dim (bool, optional): Whether to squeeze the time dimension. Default is True.
+        - chunk_size (int, optional): The chunk size. Default is 1024.
 
         Returns: 
         - stack (xr.DataArray): The stackstac.stack object.
@@ -479,7 +479,13 @@ class ReadSTAC():
             print(f"Returning stack from single S2 image with ID: {items.id}")
         else:
             print("Returning Mosaic of mutliple S2 Images!")
-        
+
+        if custom_point_and_buffer is not None:
+            lon, lat, buffer = custom_point_and_buffer
+
+            x_utm, y_utm = pyproj.Proj(stack.crs)(lon, lat)
+            stack = stack.loc[..., y_utm+buffer:y_utm-buffer, x_utm-buffer:x_utm+buffer]
+
         if squeeze_time_dim:
             # remove the time dimension (would be 1 in case it's a pystac.item.Item)
             stack = stackstac.mosaic(stack, dim='time').squeeze()
