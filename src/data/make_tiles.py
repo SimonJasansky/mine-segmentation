@@ -1,7 +1,16 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+
 import rasterio
 import geopandas as gpd
 from shapely.geometry import box
+from shapely.ops import transform
+import shapely
 from tqdm import tqdm
+tqdm.pandas()
+import pyproj
+from functools import partial
 
 MAUS_POLYGONS = "data/external/maus_mining_polygons.gpkg"
 MAUS_AREA_RASTER = "data/external/maus_mining_raster.tif"
@@ -67,7 +76,7 @@ print(f"Number of total tiles: {src.width * src.height}")
 print(f"Number of original mining area tiles: {len(array[array > 0])}")
 
 # Get the transformation matrix
-transform = src.transform
+transform_matrix = src.transform
 
 # Create an empty list to store the bounding boxes
 bounding_boxes = []
@@ -80,8 +89,8 @@ for x in tqdm(range(src.width)):
         if array[y, x] > 2:
             # Get the pixel's bounding box
             # The bounding box is defined by the pixel's top-left and bottom-right corners
-            top_left = transform * (x, y)
-            bottom_right = transform * (x + 1, y + 1)
+            top_left = transform_matrix * (x, y)
+            bottom_right = transform_matrix * (x + 1, y + 1)
             bounding_box = [top_left[0], bottom_right[1], bottom_right[0], top_left[1]]
             
             # Add the bounding box to the list
@@ -90,14 +99,53 @@ for x in tqdm(range(src.width)):
             # add the mining area to the list
             mining_area.append(array[y, x])
 
-
 # Create a GeoDataFrame from the bounding boxes and the area
 gdf = gpd.GeoDataFrame(geometry=[box(*bbox) for bbox in bounding_boxes], crs="EPSG:4326")
-gdf["mining_area_maus"] = mining_area
+
+# # for each tile, get the centroid
+centroids = gdf["geometry"].to_crs("EPSG:4326").centroid
+gdf["centroid"] = gdf.centroid
 
 print(gdf.head())
 
-# Print the number of tiles
+def add_bbox(row): 
+    point = row.centroid
+
+    # Define the projection to UTM (Universal Transverse Mercator)
+    # Find UTM zone for the centroid of the polygon for more accuracy
+    utm_zone = int((point.x + 180) / 6) + 1
+    crs_proj = pyproj.Proj(proj='utm', zone=utm_zone, ellps='WGS84', preserve_units=False)
+
+    # Define transformations from WGS84 to UTM and back
+    project_to_utm = partial(pyproj.transform, pyproj.Proj(init='epsg:4326'), crs_proj)
+    project_to_wgs84 = partial(pyproj.transform, crs_proj, pyproj.Proj(init='epsg:4326'))
+
+    # Transform the polygon to the UTM projection
+    point = transform(project_to_utm, point)
+
+    # calculate the bbox using the buffer
+    buffer = 10240
+    bbox = (point.x - buffer, point.y - buffer, point.x + buffer, point.y + buffer)
+
+    # convert bbox to polygon
+    bbox = shapely.geometry.box(*bbox)
+
+    # Transform the polygon back to WGS84
+    bbox = transform(project_to_wgs84, bbox)
+
+    return bbox
+
+# add the bounding box to the geodataframe
+gdf["bbox"] = gdf.progress_apply(add_bbox, axis=1)
+
+# convert to string
+gdf["centroid"] = gdf["centroid"].to_wkt()
+gdf["bbox"] = gdf["bbox"].to_wkt()
+
+# add the mining area to the geodataframe
+gdf["mining_area"] = mining_area
+
+print(gdf.head())
 print(f"Number of mining area tiles: {len(gdf)}")
 
 # save the bounding boxes as a geopackage file
