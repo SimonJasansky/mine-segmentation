@@ -100,20 +100,16 @@ for x in tqdm(range(src.width)):
             mining_area.append(array[y, x])
 
 # Create a GeoDataFrame from the bounding boxes and the area
-gdf = gpd.GeoDataFrame(geometry=[box(*bbox) for bbox in bounding_boxes], crs="EPSG:4326")
+gdf_rect = gpd.GeoDataFrame(geometry=[box(*bbox) for bbox in bounding_boxes], crs="EPSG:4326")
 
-# # for each tile, get the centroid
-centroids = gdf["geometry"].to_crs("EPSG:4326").centroid
-gdf["centroid"] = gdf.centroid
+centroids = []
+square_bboxes = []
 
-print(gdf.head())
+for rect in tqdm(gdf_rect.geometry):
+    centroid_unprojected = rect.centroid
 
-def add_bbox(row): 
-    point = row.centroid
-
-    # Define the projection to UTM (Universal Transverse Mercator)
-    # Find UTM zone for the centroid of the polygon for more accuracy
-    utm_zone = int((point.x + 180) / 6) + 1
+    # Calculate UTM zone for the centroid
+    utm_zone = int((centroid_unprojected.x + 180) / 6) + 1
     crs_proj = pyproj.Proj(proj='utm', zone=utm_zone, ellps='WGS84', preserve_units=False)
 
     # Define transformations from WGS84 to UTM and back
@@ -121,34 +117,31 @@ def add_bbox(row):
     project_to_wgs84 = partial(pyproj.transform, crs_proj, pyproj.Proj(init='epsg:4326'))
 
     # Transform the polygon to the UTM projection
-    point = transform(project_to_utm, point)
+    rect_proj = transform(project_to_utm, rect)
 
-    # calculate the bbox using the buffer
-    buffer = 10240
-    bbox = (point.x - buffer, point.y - buffer, point.x + buffer, point.y + buffer)
+    # Calculate centroid and bbox in UTM
+    centroid = rect_proj.centroid
+    buffer = 10240  # Define buffer size
+    bbox = box(centroid.x - buffer, centroid.y - buffer, centroid.x + buffer, centroid.y + buffer)
 
-    # convert bbox to polygon
-    bbox = shapely.geometry.box(*bbox)
+    # Transform bbox and centroid back to WGS84
+    bbox_wgs84 = transform(project_to_wgs84, bbox)
+    centroid_wgs84 = transform(project_to_wgs84, centroid)
+    
+    # Append results
+    centroids.append(centroid_wgs84)
+    square_bboxes.append(bbox_wgs84)
 
-    # Transform the polygon back to WGS84
-    bbox = transform(project_to_wgs84, bbox)
+gdf_square = gpd.GeoDataFrame(geometry=square_bboxes, crs="EPSG:4326")
+gdf_square["centroid"] = gpd.GeoSeries(centroids).to_wkt()
+gdf_square["mining_area"] = mining_area
+gdf_rect["mining_area"] = mining_area
 
-    return bbox
-
-# add the bounding box to the geodataframe
-gdf["bbox"] = gdf.progress_apply(add_bbox, axis=1)
-
-# convert to string
-gdf["centroid"] = gdf["centroid"].to_wkt()
-gdf["bbox"] = gdf["bbox"].to_wkt()
-
-# add the mining area to the geodataframe
-gdf["mining_area"] = mining_area
-
-print(gdf.head())
-print(f"Number of mining area tiles: {len(gdf)}")
+print(gdf_square.head())
+print(f"Number of mining area tiles: {len(gdf_square)}")
 
 # save the bounding boxes as a geopackage file
-gdf.to_file("data/interim/mining_areas.gpkg", driver="GPKG")
+gdf_square.to_file("data/interim/tiles.gpkg", driver="GPKG", layer="mining_areas_square")
+gdf_rect.to_file("data/interim/tiles.gpkg", driver="GPKG", layer="mining_areas_rect")
 
 print("Successfully saved mining area tiles.")
