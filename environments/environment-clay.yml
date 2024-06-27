@@ -18,6 +18,7 @@ dependencies:
   - pandas
   - matplotlib
   - Pillow
+  - python=~3.11
   - scikit-image
   - seaborn
   - streamlit
