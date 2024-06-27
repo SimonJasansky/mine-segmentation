@@ -2,17 +2,15 @@ import streamlit as st
 import geopandas as gpd
 import pandas as pd
 import shapely
-from shapely.ops import transform
-from functools import partial
 import os
 import pystac
-import pyproj
 
 from src.data.get_satellite_images import ReadSTAC
+from src.utils import calculate_dimensions_km
 
 import leafmap.foliumap as leafmap
 
-MINING_AREAS = "data/interim/mining_areas.gpkg"
+TILES = "data/interim/tiles.gpkg"
 MAUS_POLYGONS = "data/external/maus_mining_polygons.gpkg"
 TANG_POLYGONS = "data/external/tang_mining_polygons/74548_mine_polygons/74548_projected.shp"
 DATASET = "data/raw/mining_tiles_with_masks.gpkg"
@@ -59,7 +57,7 @@ def load_data():
         data_dir="streamlit_app/data"
     )
 
-    mining_area_tiles = gpd.read_file(MINING_AREAS)
+    mining_area_tiles = gpd.read_file(TILES, layer="mining_areas_square")
 
     return maus_gdf, tang_gdf, stac_reader, dataset, mining_area_tiles
 
@@ -72,7 +70,7 @@ def set_random_tile():
         GeoDataFrame: Random mining tile.
     """
     # Refresh the tile
-    mining_area_tiles = gpd.read_file(MINING_AREAS)
+    mining_area_tiles = gpd.read_file(TILES)
     dataset = gpd.read_file(DATASET)
 
     # take only tiles that are not yet in the dataset
@@ -83,42 +81,6 @@ def set_random_tile():
 
     # Reset the year to 2019
     st.session_state.year = 2019
-
-def calculate_dimensions_km(polygon):
-    """
-    Calculate the dimensions (width, height) in kilometers of a given polygon.
-    
-    Parameters:
-    - polygon: A shapely Polygon object.
-    
-    Returns:
-    - A tuple (width_km, height_km) representing the dimensions in kilometers.
-    """
-    # Define the projection to UTM (Universal Transverse Mercator)
-    # Find UTM zone for the centroid of the polygon for more accuracy
-    utm_zone = int((polygon.centroid.x + 180) / 6) + 1
-    crs_proj = pyproj.Proj(proj='utm', zone=utm_zone, ellps='WGS84', preserve_units=False)
-    
-    # Define transformations from WGS84 to UTM and back
-    project_to_utm = partial(pyproj.transform, pyproj.Proj(init='epsg:4326'), crs_proj)
-    project_to_wgs84 = partial(pyproj.transform, crs_proj, pyproj.Proj(init='epsg:4326'))
-    
-    # Transform the polygon to the UTM projection
-    polygon_utm = transform(project_to_utm, polygon)
-    
-    # Calculate bounds in UTM
-    minx, miny, maxx, maxy = polygon_utm.bounds
-    
-    # Calculate width and height in meters
-    width_m = maxx - minx
-    height_m = maxy - miny
-    
-    # Convert meters to kilometers
-    width_km = width_m / 1000
-    height_km = height_m / 1000
-    
-    return (width_km, height_km)
-
 
 
 def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
@@ -320,15 +282,12 @@ def main():
 
     # Visualize the tile
     maus_gdf_filtered, tang_gdf_filtered, s2_tile_id = visualize_tile(st.session_state.tile, maus_gdf, tang_gdf, stac_reader, st.session_state.year)
-
-    # # Display the map
-    # m.to_streamlit()
     
     # # Get the custom polygon from the leafmap 
     # m.save_draw_features("streamlit_app/data/custom_features.geojson")
 
     # Create layout
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         if st.button(":blue-background[Accept Maus]", key="maus"):
@@ -355,8 +314,8 @@ def main():
             dataset.to_file(DATASET, driver="GPKG")
             st.success("Tile and polygons rejected successfully")
 
-    # with col3:
-    #     if st.button("Accept custom", key="custom"):
+    # with col4:
+    #     if st.button("Accept both", key="custom"):
     #         # Get the custom polygon from the leafmap 
     #         m.save_draw_features("streamlit_app/data/custom_features.geojson")
             
