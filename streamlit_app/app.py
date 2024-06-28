@@ -42,11 +42,11 @@ def load_data():
         pass
         # Load the dataset
         # tiles = gpd.read_file(DATASET, layer="tiles")
-        # maus = gpd.read_file(DATASET, layer="maus")
-        # tang = gpd.read_file(DATASET, layer="tang")
+        # maus = gpd.read_file(DATASET, layer="maus_polygons")
+        # tang = gpd.read_file(DATASET, layer="tang_polygons")
     else:
         # Create the dataset
-        columns_tiles = ["tile_id", "sentinel_2_id", "source_dataset", "preferred_dataset", "minetype1", "minetype2", "comment", "timestamp", "geometry"]
+        columns_tiles = ["tile_id", "s2_tile_id", "source_dataset", "preferred_dataset", "minetype1", "minetype2", "comment", "timestamp", "geometry"]
         columns_maus = ["tile_id", "geometry"]
         columns_tang = ["tile_id", "geometry"]
         tiles = gpd.GeoDataFrame(columns=columns_tiles, crs="EPSG:4326", geometry="geometry")
@@ -55,8 +55,8 @@ def load_data():
 
         # write to file
         tiles.to_file(DATASET, driver="GPKG", layer="tiles")
-        maus.to_file(DATASET, driver="GPKG", layer="maus")
-        tang.to_file(DATASET, driver="GPKG", layer="tang")
+        maus.to_file(DATASET, driver="GPKG", layer="maus_polygons")
+        tang.to_file(DATASET, driver="GPKG", layer="tang_polygons")
 
     # Initialize the STAC reader
     api_url="https://planetarycomputer.microsoft.com/api/stac/v1"
@@ -90,8 +90,10 @@ def set_random_tile():
 
     # Reset the year to 2019
     st.session_state.year = 2019
-
     st.session_state.comment = ""
+    st.session_state.minetype1 = "Surface"
+    st.session_state.minetype2 = "Industrial"
+    st.session_state.preferred_dataset = None
 
 
 def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
@@ -236,7 +238,7 @@ def accept_polygons(
 
     if st.session_state.preferred_dataset == ":large_blue_circle: :blue-background[Maus]":
         preferred_dataset = "maus"
-    elif st.session_state.preferred_dataset == ":red_circle: :red-background[Accept Tang]":
+    elif st.session_state.preferred_dataset == ":red_circle: :red-background[Tang]":
         preferred_dataset = "tang"
     else:
         preferred_dataset = None
@@ -255,23 +257,23 @@ def accept_polygons(
 
     maus_dict = {
         "tile_id": tile.index[0],
-        "geometry": maus_gdf_filtered["geometry"].values[0]
+        "geometry": None
     }
 
     tang_dict = {
         "tile_id": tile.index[0],
-        "geometry": tang_gdf_filtered["geometry"].values[0]
+        "geometry": None
     }
 
     if accepted_source_dataset == "maus":
-        tang_dict["geometry"] = None
+        maus_dict["geometry"] = maus_gdf_filtered["geometry"].values[0]
     elif accepted_source_dataset == "tang":
-        maus_dict["geometry"] = None
+        tang_dict["geometry"] = tang_gdf_filtered["geometry"].values[0]
     elif accepted_source_dataset == "both":
-        pass
+        maus_dict["geometry"] = maus_gdf_filtered["geometry"].values[0]
+        tang_dict["geometry"] = tang_gdf_filtered["geometry"].values[0]
     elif accepted_source_dataset == "rejected":
-        maus_dict["geometry"] = None
-        tang_dict["geometry"] = None
+        pass
     else:
         raise ValueError("Invalid source dataset")
     
@@ -281,8 +283,8 @@ def accept_polygons(
 
     # Load the existing dataset
     tiles = gpd.read_file(DATASET, layer="tiles")
-    maus = gpd.read_file(DATASET, layer="maus")
-    tang = gpd.read_file(DATASET, layer="tang")
+    maus = gpd.read_file(DATASET, layer="maus_polygons")
+    tang = gpd.read_file(DATASET, layer="tang_polygons")
     
     # Concatenate the dataset with the new row
     tiles = pd.concat([tiles, accepted_tiles], ignore_index=True)
@@ -291,8 +293,8 @@ def accept_polygons(
 
     # Write the dataset to the file
     tiles.to_file(DATASET, driver="GPKG", layer="tiles")
-    maus.to_file(DATASET, driver="GPKG", layer="maus")
-    tang.to_file(DATASET, driver="GPKG", layer="tang")
+    maus.to_file(DATASET, driver="GPKG", layer="maus_polygons")
+    tang.to_file(DATASET, driver="GPKG", layer="tang_polygons")
 
     
 ##################
@@ -339,7 +341,7 @@ def main():
                 index=None, key="preferred_dataset")
     with col2:
         # Add horizontal radio button for mine type 1
-        st.radio("Mine Type 1", ["Hard Rock", "Brine & Evaporation Pond"], index=0, key="minetype1")
+        st.radio("Mine Type 1", ["Surface", "Brine & Evaporation Pond"], index=0, key="minetype1")
     with col3:
         # Add horizontal radio button for mine type 2
         st.radio("Mine Type 2", ["Industrial", "Artisanal"], index=0, key="minetype2")
@@ -371,7 +373,7 @@ def main():
     with col4:
         # Reject the tile and the polygons
         if st.button(":x: Reject Tile", key="rejected"):
-            accept_polygons(maus_gdf_filtered, tang_gdf_filtered, accepted_source_dataset="reject", s2_tile_id=s2_tile_id)
+            accept_polygons(maus_gdf_filtered, tang_gdf_filtered, accepted_source_dataset="rejected", s2_tile_id=s2_tile_id)
             st.success("Tile and polygons rejected successfully")
 
     # Add section separator
@@ -380,8 +382,8 @@ def main():
     # Undo button deleting the last row
     if st.button("Undo: Delete last Row", key="undo"):
         tiles_copy = gpd.read_file(DATASET, layer="tiles")
-        maus_copy = gpd.read_file(DATASET, layer="maus")
-        tang_copy = gpd.read_file(DATASET, layer="tang")
+        maus_copy = gpd.read_file(DATASET, layer="maus_polygons")
+        tang_copy = gpd.read_file(DATASET, layer="tang_polygons")
 
         # Delete the last row
         tiles_copy = tiles_copy.iloc[:-1]
@@ -390,35 +392,39 @@ def main():
 
         # Write the dataset to the file
         tiles_copy.to_file(DATASET, driver="GPKG", layer="tiles")
-        maus_copy.to_file(DATASET, driver="GPKG", layer="maus")
-        tang_copy.to_file(DATASET, driver="GPKG", layer="tang")
+        maus_copy.to_file(DATASET, driver="GPKG", layer="maus_polygons")
+        tang_copy.to_file(DATASET, driver="GPKG", layer="tang_polygons")
 
         st.warning("Last row deleted")
 
     # Display the last 10 rows of the dataset
     tiles_copy = gpd.read_file(DATASET, layer="tiles")
-    maus_copy = gpd.read_file(DATASET, layer="maus")
-    tang_copy = gpd.read_file(DATASET, layer="tang")
+    maus_copy = gpd.read_file(DATASET, layer="maus_polygons")
+    tang_copy = gpd.read_file(DATASET, layer="tang_polygons")
 
     # Convert the geometry to WKT
-    tiles_copy['geometry_wkt'] = tiles_copy['geometry'].apply(shapely.wkt.dumps)
-    maus_copy['geometry_wkt'] = maus_copy['geometry'].apply(shapely.wkt.dumps)
-    tang_copy['geometry_wkt'] = tang_copy['geometry'].apply(shapely.wkt.dumps)
+    tiles_copy['geometry_wkt'] = tiles_copy['geometry'].apply(lambda x: shapely.wkt.dumps(x)).astype(str)
+    maus_copy['geometry_wkt'] = maus_copy['geometry'].apply(lambda x: shapely.wkt.dumps(x)).astype(str)
+    tang_copy['geometry_wkt'] = tang_copy['geometry'].apply(lambda x: shapely.wkt.dumps(x)).astype(str)
 
     # Drop the geometry column
     tiles_copy = tiles_copy.drop(columns="geometry")
     maus_copy = maus_copy.drop(columns="geometry")
     tang_copy = tang_copy.drop(columns="geometry")
 
-    # Merge the datasets
-    dataset_copy = tiles_copy.merge(maus_copy, on="tile_id", how="left", suffixes=("", "_maus"))
-    dataset_copy = dataset_copy.merge(tang_copy, on="tile_id", how="left", suffixes=("", "_tang"))
-
     # Display the dataset
-    st.dataframe(dataset_copy)
+    st.dataframe(tiles_copy)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("Maus Polygons")
+        st.dataframe(maus_copy)
+    with col2:
+        st.write("Tang Polygons")
+        st.dataframe(tang_copy)
 
     # Add progress bar for the dataset
-    n_tiles_reviewed = len(dataset_copy)
+    n_tiles_reviewed = len(tang_copy)
     n_tiles_to_review = len(mining_area_tiles)
     st.write(f"Progress: {n_tiles_reviewed}/{n_tiles_to_review} tiles reviewed.",
             f"{n_tiles_reviewed / n_tiles_to_review:.2%} completed.")

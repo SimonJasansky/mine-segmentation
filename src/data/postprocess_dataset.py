@@ -10,6 +10,9 @@ DATASET_RAW = "data/raw/mining_tiles_with_masks.gpkg"
 DATASET_PROCESSED = "data/processed/mining_tiles_with_masks_and_bounding_boxes.gpkg"
 
 def add_bounding_boxes(row):
+    if row.geometry is None:
+        return None
+    
     # apply buffer 
     row.geometry = row.geometry.buffer(0.0001)
 
@@ -23,18 +26,12 @@ def add_bounding_boxes(row):
         # convert back to multipolygon
         bounding_boxes = shapely.geometry.MultiPolygon(bounding_boxes)
         
-        # convert to GeoJSON string
-        geojson_str = json.dumps(mapping(bounding_boxes))
-
-        return geojson_str
+        return bounding_boxes
     else:
         # Create a box from the bounding box
-        bounding_box = box(*union.bounds)
+        bounding_boxes = box(*union.bounds)
 
-        # Convert the bounding box to a GeoJSON string
-        geojson_str = json.dumps(mapping(bounding_box))
-
-        return geojson_str
+        return bounding_boxes
 
 if __name__ == '__main__':
 
@@ -42,35 +39,19 @@ if __name__ == '__main__':
     if not os.path.exists(DATASET_RAW):
         raise FileNotFoundError(f"Dataset not found at {DATASET_RAW}")
 
-    data = gpd.read_file(DATASET_RAW)
+    maus = gpd.read_file(DATASET_RAW, layer="maus_polygons")
+    tang = gpd.read_file(DATASET_RAW, layer="tang_polygons")
 
     # Add bounding boxes to the dataset
-    data["bounding_box"] = data.apply(add_bounding_boxes, axis=1)
+    maus_bboxes = maus.apply(add_bounding_boxes, axis=1)
+    tang_bboxes = tang.apply(add_bounding_boxes, axis=1)
 
-    # Split the data set into three layers to be added to the geopackage file
-    tiles = data.loc[:, ["tile_id", "sentinel_2_id", "source_dataset", "timestamp", "tile_bbox"]]
-    masks = data.loc[:, ["tile_id", "geometry"]]
-    bounding_boxes = data.loc[:, ["tile_id", "bounding_box"]]
-
-    # convert columns to valid geometry
-    tiles["tile_bbox"] = tiles["tile_bbox"].apply(lambda x: shape(json.loads(x)))
-    bounding_boxes["bounding_box"] = bounding_boxes["bounding_box"].apply(lambda x: shape(json.loads(x)))
-
-    # rename columns
-    tiles = tiles.rename(columns={"tile_bbox": "geometry"})
-    bounding_boxes = bounding_boxes.rename(columns={"bounding_box": "geometry"})
-
-    # convert to geodataframes
-    tiles = gpd.GeoDataFrame(tiles, geometry="geometry")
-    bounding_boxes = gpd.GeoDataFrame(bounding_boxes, geometry="geometry")
-
-    # Set the crs
-    tiles.crs = masks.crs
-    bounding_boxes.crs = masks.crs
+    # Create the geodataframes with the bounding boxes
+    maus_bboxes_gdf = gpd.GeoDataFrame(maus_bboxes, geometry="geometry", crs=maus.crs)
+    tang_bboxes_gdf = gpd.GeoDataFrame(tang_bboxes, geometry="geometry", crs=tang.crs)
 
     # Write the dataframes to geopackage with different layers
-    tiles.to_file(DATASET_PROCESSED, layer="tiles", driver="GPKG")
-    masks.to_file(DATASET_PROCESSED, layer="masks", driver="GPKG")
-    bounding_boxes.to_file(DATASET_PROCESSED, layer="bounding_boxes", driver="GPKG")
+    maus_bboxes_gdf.to_file(DATASET_PROCESSED, layer="maus_bboxes", driver="GPKG")
+    tang_bboxes_gdf.to_file(DATASET_PROCESSED, layer="tang_bboxes", driver="GPKG")
 
     print(f"Data successfully written to {DATASET_PROCESSED}")
