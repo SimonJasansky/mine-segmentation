@@ -11,7 +11,7 @@ DATASET_PROCESSED = "data/processed/mining_tiles_with_masks_and_bounding_boxes.g
 
 def add_bounding_boxes(row):
     if row.geometry is None:
-        return None
+        return shapely.geometry.Polygon()
     
     # apply buffer 
     row.geometry = row.geometry.buffer(0.0001)
@@ -31,6 +31,9 @@ def add_bounding_boxes(row):
         # Create a box from the bounding box
         bounding_boxes = box(*union.bounds)
 
+        # convert to polygon
+        bounding_boxes = shapely.geometry.Polygon(bounding_boxes)
+
         return bounding_boxes
 
 if __name__ == '__main__':
@@ -39,6 +42,7 @@ if __name__ == '__main__':
     if not os.path.exists(DATASET_RAW):
         raise FileNotFoundError(f"Dataset not found at {DATASET_RAW}")
 
+    tiles = gpd.read_file(DATASET_RAW, layer="tiles")
     maus = gpd.read_file(DATASET_RAW, layer="maus_polygons")
     tang = gpd.read_file(DATASET_RAW, layer="tang_polygons")
 
@@ -46,10 +50,19 @@ if __name__ == '__main__':
     maus_bboxes = maus.apply(add_bounding_boxes, axis=1)
     tang_bboxes = tang.apply(add_bounding_boxes, axis=1)
 
-    # Create the geodataframes with the bounding boxes
-    maus_bboxes_gdf = gpd.GeoDataFrame(maus_bboxes, geometry="geometry", crs=maus.crs)
-    tang_bboxes_gdf = gpd.GeoDataFrame(tang_bboxes, geometry="geometry", crs=tang.crs)
+    # Create the geodataframes with the bounding boxes as geometry column 
+    maus_bboxes_gdf = gpd.GeoDataFrame(geometry=maus_bboxes, crs=maus.crs)
+    tang_bboxes_gdf = gpd.GeoDataFrame(geometry=tang_bboxes, crs=tang.crs)
 
+    # add the tile id as a column in front of the geometry column
+    maus_bboxes_gdf.insert(0, 'tile_id', maus['tile_id'])
+    tang_bboxes_gdf.insert(0, 'tile_id', tang['tile_id'])
+
+    # copy Dataset_RAW to location of DATASET_PROCESSED, and rename it
+    os.system(f"cp {DATASET_RAW} {DATASET_PROCESSED}")
+
+    # TODO: Create combined dataset based on preferred dataset. 
+    
     # Write the dataframes to geopackage with different layers
     maus_bboxes_gdf.to_file(DATASET_PROCESSED, layer="maus_bboxes", driver="GPKG")
     tang_bboxes_gdf.to_file(DATASET_PROCESSED, layer="tang_bboxes", driver="GPKG")
