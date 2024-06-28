@@ -320,9 +320,10 @@ def main():
         set_random_tile()
 
     with st.sidebar:
-        st.button("Refresh Tile", on_click=set_random_tile)
         
         st.radio("Select Year", list(range(2016, 2023)), index=3, key="year")
+        
+    st.button("Refresh Tile", on_click=set_random_tile)
 
     # Visualize the tile
     maus_gdf_filtered, tang_gdf_filtered, s2_tile_id = visualize_tile(st.session_state.tile, maus_gdf, tang_gdf, stac_reader, st.session_state.year)
@@ -333,7 +334,7 @@ def main():
         # Add horizontal radio button for preferred source dataset
         st.radio("Preferred Source Dataset", 
                 [":large_blue_circle: :blue-background[Maus]", 
-                 ":red_circle: :red-background[Accept Tang]", 
+                 ":red_circle: :red-background[Tang]", 
                  "None"], 
                 index=None, key="preferred_dataset")
     with col2:
@@ -358,19 +359,19 @@ def main():
 
     with col2:
         if st.button(":red_circle: :red-background[Accept Tang]", key="tang"):
-            accept_polygons(maus_gdf_filtered, tang_gdf_filtered, accepted_source_dataset="maus", s2_tile_id=s2_tile_id)
+            accept_polygons(maus_gdf_filtered, tang_gdf_filtered, accepted_source_dataset="tang", s2_tile_id=s2_tile_id)
             st.success("Polygons by Tang (red) accepted successfully")
 
     with col3:
         # Accept both Maus' and Tang's polygons
         if st.button(":white_check_mark: Accept both", key="both"):
-            accept_polygons(maus_gdf_filtered, tang_gdf_filtered, accepted_source_dataset="maus", s2_tile_id=s2_tile_id)
+            accept_polygons(maus_gdf_filtered, tang_gdf_filtered, accepted_source_dataset="both", s2_tile_id=s2_tile_id)
             st.success("Both polygons (Maus & Tang) accepted successfully")
 
     with col4:
         # Reject the tile and the polygons
         if st.button(":x: Reject Tile", key="rejected"):
-            accept_polygons(maus_gdf_filtered, tang_gdf_filtered, accepted_source_dataset="maus", s2_tile_id=s2_tile_id)
+            accept_polygons(maus_gdf_filtered, tang_gdf_filtered, accepted_source_dataset="reject", s2_tile_id=s2_tile_id)
             st.success("Tile and polygons rejected successfully")
 
     # Add section separator
@@ -400,9 +401,14 @@ def main():
     tang_copy = gpd.read_file(DATASET, layer="tang")
 
     # Convert the geometry to WKT
-    tiles_copy['geometry'] = tiles_copy['geometry'].apply(shapely.wkt.dumps)
-    maus_copy['geometry'] = maus_copy['geometry'].apply(shapely.wkt.dumps)
-    tang_copy['geometry'] = tang_copy['geometry'].apply(shapely.wkt.dumps)
+    tiles_copy['geometry_wkt'] = tiles_copy['geometry'].apply(shapely.wkt.dumps)
+    maus_copy['geometry_wkt'] = maus_copy['geometry'].apply(shapely.wkt.dumps)
+    tang_copy['geometry_wkt'] = tang_copy['geometry'].apply(shapely.wkt.dumps)
+
+    # Drop the geometry column
+    tiles_copy = tiles_copy.drop(columns="geometry")
+    maus_copy = maus_copy.drop(columns="geometry")
+    tang_copy = tang_copy.drop(columns="geometry")
 
     # Merge the datasets
     dataset_copy = tiles_copy.merge(maus_copy, on="tile_id", how="left", suffixes=("", "_maus"))
