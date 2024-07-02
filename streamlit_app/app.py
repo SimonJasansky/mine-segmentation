@@ -92,8 +92,9 @@ def set_random_tile():
     st.session_state.year = 2019
     st.session_state.comment = ""
     st.session_state.minetype1 = "Surface"
-    st.session_state.minetype2 = "Industrial"
+    st.session_state.minetype2 = None
     st.session_state.preferred_dataset = None
+    st.session_state.satellite = False
 
 
 def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
@@ -138,11 +139,12 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
     if len(items) < 1: 
         st.error("No S2 images found for this tile. Please refresh the tile or change to another year.")
 
-    # Get the least cloudy images
-    least_cloudy_item = stac_reader.filter_item(items, "least_cloudy", full_overlap = True)
+    try:
+        # Get the least cloudy images
+        least_cloudy_item = stac_reader.filter_item(items, "least_cloudy", full_overlap=True)
+    except ValueError:
+        st.error("A ValueError occurred. No S2 images that fully overlap with this tile are found. Please refresh the tile.")
 
-    if isinstance(least_cloudy_item, pystac.ItemCollection):
-        least_cloudy_item = least_cloudy_item[0]
 
     with col3:
         # Display the cloud coverage
@@ -150,6 +152,8 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
     
     url = least_cloudy_item.assets["visual"].href
     s2_tile_id = least_cloudy_item.id
+
+    st.write(f"Sentinel-2 Tile ID: {s2_tile_id}")
     
     # Create a Map
     m = leafmap.Map(center=[tile_geometry.centroid.y, tile_geometry.centroid.x], zoom=10)
@@ -240,8 +244,20 @@ def accept_polygons(
         preferred_dataset = "maus"
     elif st.session_state.preferred_dataset == ":red_circle: :red-background[Tang]":
         preferred_dataset = "tang"
+    elif st.session_state.preferred_dataset == "None":
+        preferred_dataset = "none"
     else:
-        preferred_dataset = None
+        st.error("Please select a preferred dataset")
+
+    # check if minetype2 is selected
+    if st.session_state.minetype2 is None:
+        st.error("Please select a mine type 2 (Artisanal or Industrial)")
+
+    # check if preferred and accepted datasets are mutually exclusive
+    if accepted_source_dataset == "maus" and preferred_dataset == "tang":
+        st.error("Maus dataset cannot be preferred if Tang dataset is accepted")
+    elif accepted_source_dataset == "tang" and preferred_dataset == "maus":
+        st.error("Tang dataset cannot be preferred if Maus dataset is accepted")
 
     tiles_dict = {
         "tile_id": tile.index[0],
@@ -344,7 +360,7 @@ def main():
         st.radio("Mine Type 1", ["Surface", "Brine & Evaporation Pond"], index=0, key="minetype1")
     with col3:
         # Add horizontal radio button for mine type 2
-        st.radio("Mine Type 2", ["Industrial", "Artisanal"], index=0, key="minetype2")
+        st.radio("Mine Type 2", ["Industrial", "Artisanal"], index=None, key="minetype2")
     with col4:
         # Add a text input for comments
         st.text_input("Comment", key="comment", placeholder="Comment")
@@ -412,6 +428,13 @@ def main():
     maus_copy = maus_copy.drop(columns="geometry")
     tang_copy = tang_copy.drop(columns="geometry")
 
+    # Add progress bar for the dataset
+    n_tiles_reviewed = len(tang_copy)
+    n_tiles_to_review = len(mining_area_tiles)
+    st.write(f"Progress: {n_tiles_reviewed}/{n_tiles_to_review} tiles reviewed.",
+            f"{n_tiles_reviewed / n_tiles_to_review:.2%} completed.")
+    st.progress(n_tiles_reviewed / n_tiles_to_review)
+
     # Display the dataset
     st.dataframe(tiles_copy)
 
@@ -422,13 +445,6 @@ def main():
     with col2:
         st.write("Tang Polygons")
         st.dataframe(tang_copy)
-
-    # Add progress bar for the dataset
-    n_tiles_reviewed = len(tang_copy)
-    n_tiles_to_review = len(mining_area_tiles)
-    st.write(f"Progress: {n_tiles_reviewed}/{n_tiles_to_review} tiles reviewed.",
-            f"{n_tiles_reviewed / n_tiles_to_review:.2%} completed.")
-    st.progress(n_tiles_reviewed / n_tiles_to_review)
 
 if __name__ == "__main__":
     main()

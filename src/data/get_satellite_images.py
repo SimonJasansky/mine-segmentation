@@ -300,6 +300,12 @@ class ReadSTAC():
         unique_tile_ids = set([item.properties["unique_tile_identifier"] for item in items])
         print(f"Found {len(unique_tile_ids)} unique tile ids.")
 
+        # Raise error in case no unique tiles are found 
+        if len(unique_tile_ids) == 0:
+            raise ValueError("""
+                             No unique tile identifiers found. This is likely caused by requiring full overlap of the bounding box with the item.
+                             To remedy this, specify ```full_overlap=False``` to allow for partial overlap.""")
+
         filtered_items = []
 
         # Apply Filter for each unique tile/orbit points
