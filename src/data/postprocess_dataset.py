@@ -61,10 +61,31 @@ if __name__ == '__main__':
     # copy Dataset_RAW to location of DATASET_PROCESSED, and rename it
     os.system(f"cp {DATASET_RAW} {DATASET_PROCESSED}")
 
-    # TODO: Create combined dataset based on preferred dataset. 
+    # Create combined dataset based on preferred dataset. 
+    preferred_poly = []
+    preferred_bbox = []
+
+    for i in range(len(tiles)):
+        if tiles.iloc[i,:]["preferred_dataset"] == "maus": 
+            preferred_poly.append(maus.iloc[i,:].geometry)
+            preferred_bbox.append(maus_bboxes_gdf.iloc[i,:].geometry)
+        elif tiles.iloc[i,:]["preferred_dataset"] == "tang":
+            preferred_poly.append(tang.iloc[i,:].geometry)
+            preferred_bbox.append(tang_bboxes_gdf.iloc[i,:].geometry)
+        else:
+            raise ValueError("preferred_dataset must be either 'maus' or 'tang'")
+        
+    preferred_polygons = gpd.GeoDataFrame(geometry=preferred_poly, crs=tiles.crs)
+    preferred_bboxes = gpd.GeoDataFrame(geometry=preferred_bbox, crs=tiles.crs)
+
+    # add the tile id as a column in front of the geometry column
+    preferred_polygons.insert(0, 'tile_id', tiles['tile_id'])
+    preferred_bboxes.insert(0, 'tile_id', tiles['tile_id'])
     
     # Write the dataframes to geopackage with different layers
     maus_bboxes_gdf.to_file(DATASET_PROCESSED, layer="maus_bboxes", driver="GPKG")
     tang_bboxes_gdf.to_file(DATASET_PROCESSED, layer="tang_bboxes", driver="GPKG")
+    preferred_polygons.to_file(DATASET_PROCESSED, layer="preferred_polygons", driver="GPKG")
+    preferred_bboxes.to_file(DATASET_PROCESSED, layer="preferred_bboxes", driver="GPKG")
 
     print(f"Data successfully written to {DATASET_PROCESSED}")
