@@ -66,6 +66,8 @@ if __name__ == '__main__':
     preferred_bbox = []
 
     for i in range(len(tiles)):
+        if tiles.iloc[i,:]["preferred_dataset"] == "none":
+            continue
         if tiles.iloc[i,:]["preferred_dataset"] == "maus": 
             preferred_poly.append(maus.iloc[i,:].geometry)
             preferred_bbox.append(maus_bboxes_gdf.iloc[i,:].geometry)
@@ -73,7 +75,7 @@ if __name__ == '__main__':
             preferred_poly.append(tang.iloc[i,:].geometry)
             preferred_bbox.append(tang_bboxes_gdf.iloc[i,:].geometry)
         else:
-            raise ValueError("preferred_dataset must be either 'maus' or 'tang'")
+            raise ValueError("preferred_dataset must be either 'maus' or 'tang', or 'none'")
         
     preferred_polygons = gpd.GeoDataFrame(geometry=preferred_poly, crs=tiles.crs)
     preferred_bboxes = gpd.GeoDataFrame(geometry=preferred_bbox, crs=tiles.crs)

@@ -549,7 +549,8 @@ class ReadSTAC():
     def save_stack_as_geotiff(
         self, 
         stack: xr.Dataset, 
-        filename: str,
+        path: str,
+
     ) -> str:
         """
         Save the stackstac.stack object as a GeoTIFF.
@@ -560,17 +561,9 @@ class ReadSTAC():
         Returns:
         - output_path (str): The path to the saved GeoTIFF file.
         """
-
-        # check if filename ends with .tif, if not add it 
-        if not filename.endswith(".tif"):
-            filename = f"{filename}.tif"
-            
-        output_path = f"{self.data_dir}/{filename}"
-
         # Save the stack as a GeoTIFF
-        print(f"Saving stack as GeoTIFF under: {output_path}")
-        stack.rio.to_raster(output_path)
-        return(output_path)
+        stack.rio.to_raster(path)
+        print(f"Saving stack as GeoTIFF under: {path}")
 
 
     def display_stack_as_image(
