@@ -282,12 +282,13 @@ def accept_polygons(
     }
 
     if accepted_source_dataset == "maus":
-        maus_dict["geometry"] = maus_gdf_filtered["geometry"].values[0]
+        # Create a Multipolygon from the polygons with unary_union
+        maus_dict["geometry"] = maus_gdf_filtered["geometry"].unary_union
     elif accepted_source_dataset == "tang":
-        tang_dict["geometry"] = tang_gdf_filtered["geometry"].values[0]
+        tang_dict["geometry"] = tang_gdf_filtered["geometry"].unary_union
     elif accepted_source_dataset == "both":
-        maus_dict["geometry"] = maus_gdf_filtered["geometry"].values[0]
-        tang_dict["geometry"] = tang_gdf_filtered["geometry"].values[0]
+        maus_dict["geometry"] = maus_gdf_filtered["geometry"].unary_union
+        tang_dict["geometry"] = tang_gdf_filtered["geometry"].unary_union
     elif accepted_source_dataset == "rejected":
         pass
     else:
