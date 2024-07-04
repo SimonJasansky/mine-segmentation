@@ -12,6 +12,8 @@ from torchmetrics.classification import F1Score, MulticlassJaccardIndex
 
 from src.models.clay.segment.factory import Segmentor
 
+# Ugly workaround to define the desired width and height of the images
+FILLER = 1024
 
 class MineSegmentor(L.LightningModule):
     """
@@ -128,7 +130,7 @@ class MineSegmentor(L.LightningModule):
         outputs = self(batch)
         outputs = F.interpolate(
             outputs,
-            size=(224, 224),
+            size=(FILLER, FILLER),
             mode="bilinear",
             align_corners=False,
         )  # Resize to match labels size

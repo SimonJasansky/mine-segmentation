@@ -1,3 +1,13 @@
+r"""
+
+Example:
+
+```bash
+python src/data/persist_pixels_masks.py data/processed/files preferred_polygons --limit 25
+```
+
+"""
+
 from typing import List
 import geopandas as gpd
 import pandas as pd
