@@ -112,7 +112,11 @@ The model can be run via LightningCLI using configurations in `finetune/segment/
 
 4. Train the model:
     ```bash
-    python src/models/clay/segment.py fit --config configs/clay_segment_config.yaml
+    # on CPU
+    python src/models/clay/segment.py fit --config configs/clay_segment_config_cpu.yaml
+
+    # on GPU (maybe adjust num_workers)
+    python src/models/clay/segment.py fit --config configs/clay_segment_config_gpu.yaml
     ```
 
 ## Acknowledgments

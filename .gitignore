@@ -106,3 +106,8 @@ models/
 
 # except src/models
 !src/models/
+
+# Weights and Biases
+wandb/
+
+config.yaml

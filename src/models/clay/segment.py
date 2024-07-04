@@ -21,7 +21,7 @@ def cli_main():
     """
     Command-line inteface to run ClayMAE with ClayDataModule.
     """
-    cli = LightningCLI(MineSegmentor, MineDataModule)
+    cli = LightningCLI(MineSegmentor, MineDataModule, save_config_kwargs={"overwrite": True})
     return cli
 
 
