@@ -97,3 +97,12 @@ data/raw/*
 
 # .tif files
 *.tif
+
+# logs
+logs/
+
+# models
+models/
+
+# except src/models
+!src/models/
