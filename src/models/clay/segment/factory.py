@@ -18,7 +18,7 @@ from src.models.clay.model import Encoder
 # Ugly workaround to define the desired width and height of the feature maps
 # for the FPN layers.
 # It is always the image size // 8 (as the model works with patch size 8)
-FILLER = 128
+FILLER = 64
 
 
 class SegmentEncoder(Encoder):

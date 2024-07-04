@@ -13,7 +13,7 @@ from torchmetrics.classification import F1Score, MulticlassJaccardIndex
 from src.models.clay.segment.factory import Segmentor
 
 # Ugly workaround to define the desired width and height of the images
-FILLER = 1024
+FILLER = 512
 
 class MineSegmentor(L.LightningModule):
     """
