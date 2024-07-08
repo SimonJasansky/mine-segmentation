@@ -109,6 +109,10 @@ if __name__ == "__main__":
     print(f"Processing {len(train_tiles)} rows for train set")
     print(f"Processing {len(val_tiles)} rows for val set")
 
+    # check if the directory exists and remove it
+    if os.path.exists(output_path):
+        os.system(f"rm -r {output_path}")
+
     # make the directories for train and val
     os.makedirs(output_path + "/train", exist_ok=True)
     os.makedirs(output_path + "/val", exist_ok=True)

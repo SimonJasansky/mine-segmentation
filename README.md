@@ -6,10 +6,6 @@ This project aims to automate the semantic segmentation of mining areas in satel
 
 ### Environment Management
 
-#### Docker
-
-TODO
-
 #### Conda
 
 The project uses external models, which means you need to set up different environments. You can use Conda or Mamba to manage the environments. There are three YAML files available for different environments:
@@ -18,11 +14,7 @@ The project uses external models, which means you need to set up different envir
 - ``environment-clay.yml`` (for using the [Clay model](https://github.com/Clay-foundation/model))
 - ``environment-samgeo.yml`` (for using the [segment-geospatial model](https://github.com/opengeos/segment-geospatial))
 
- To install the right environment, follow these steps:
-
-1. Open a terminal or command prompt.
-2. Navigate to the project's root directory.
-3. Run the following command to install the environment:
+1. Install environment:
 
 ```bash
 conda env create --name mineseg-base --file environment.yml
@@ -36,11 +28,16 @@ conda env update --name mineseg-base --file environments/environment.yml --prune
 
 Make sure to replace `mineseg-base` with the desired name for your environment.
 
-1. Additionally, you have to install `unrar` using `apt-get`: 
+1. Additionally, if you want to make the tiles or use the source datasets ([Maus et al.](https://doi.pangaea.de/10.1594/PANGAEA.942325) and [Tang et al.](https://zenodo.org/records/6806817)) you have to install `unrar` using `apt-get`: 
 
 ```bash
 sudo apt-get install unrar
 ```
+
+#### Docker
+
+TODO
+
 
 ### Initializing Submodules
 
@@ -59,17 +56,17 @@ These commands will fetch and update the contents of the `clay` submodule direct
 
 To set up the repo in a Lightning Studio, do this before proceeding with the installation as detailed above:
 
-1. Change the Python version to ``3.12.2``. The default version of ``3.10.10`` (by the time of testing this) caused problems with an import of sqlite3. Additionally, ``3.12.2`` is also the version used in the dev Docker image. Changing Python version can be done on the top right by clicking on "4 CPU".
-2. Clone the repo into `this_studio/workspaces`. This ensures that most hardcoded paths are compatible with how the paths are inside the Docker devcontainer. 
+1. Change the Python version to ``3.11``. Changing Python version can be done on the top right by clicking on "4 CPU".
+2. Clone the repoository: 
 
 ```bash
-git clone https://github.com/SimonJasansky/mine-segmentation.git workspaces/mine-segmentation
+git clone https://github.com/SimonJasansky/mine-segmentation.git
 ```
 
 3. Go to project root directory:
 
 ```bash
-cd workspaces/mine-segmentation
+cd mine-segmentation
 ```
 
 4. Install one of the environments. Here, it is important that in the **command the `--name cloudspace` tag is added**, as Lightning studios only allows one environment (named cloudspace by default). If the `--name cloudspace` flag is not correctly added, conda will try to create a new environment, and Lightning Studios will break. 
@@ -79,10 +76,10 @@ Also, it is **important that the environment.yml file has `name: cloudspace` as 
 conda env update --name cloudspace --file environments/environment.yml --prune
 ```
 
-5. Add the following to the `on_start.sh` file:
+5. Add the following to the `on_start.sh` file, to always open the repository directly:
 
 ```bash
-cd workspaces/mine-segmentation
+cd mine-segmentation
 code -r .
 ```
 
@@ -93,7 +90,7 @@ code -r .
 To download the extenal datasets, generate global square tiles containing mining areas:
 
 ```bash
-python src/data/make_dataset.py 
+python src/data/make_dataset_pre.py 
 ```
 
 ### Running the streamlit app for producing the source dataset
@@ -104,12 +101,10 @@ Run the following from the `mine-segmentation` directory:
 streamlit run streamlit_app/app.py
 ```
 
-### Postprocess the manually validated dataset
-
-Add bounding boxes to the polygons:
+### Postprocess the manually validated dataset, download images, and create chips for model training
 
 ```bash
-python src/data/postprocess_dataset.py
+python src/data/make_dataset_post.py
 ```
 
 ## Other Info
@@ -123,29 +118,32 @@ export PYTHONPATH="${PYTHONPATH}:/workspaces/mine-segmentation"
 ```
 
 ## Acknowledgements
-
+This project relies on code and models provided by third party sources. 
+Credit for their amazing work goes to:
 - Clay
-- SegFormer Paper
+  - Website: https://madewithclay.org/
+  - Docs: https://clay-foundation.github.io/model/index.html
+  - Repo: https://github.com/Clay-foundation/model 
 - Samgeo
+  - Website & Docs: https://samgeo.gishub.org/ 
+  - Repo: https://github.com/opengeos/segment-geospatial 
 
 # Project Organization
+🚧 Project Organization might not be up to date.
 
-> 🚧 Project Organization might not be up to date.
 ------------
-
     ├── LICENSE
-    ├── Makefile           <- Makefile with commands like `make data` or `make train`
     ├── README.md          <- The top-level README for developers using this project.
     ├── data
     │   ├── external       <- Data from third party sources.
     │   ├── interim        <- Intermediate data that has been transformed.
     │   ├── processed      <- The final, canonical data sets for modeling.
     │   └── raw            <- The original, immutable data dump, including the manually produced dataset.
-    │
-    ├── docs               <- A default Sphinx project; see sphinx-doc.org for details
-    │
+    │ 
     ├── models             <- Trained and serialized models, model predictions, or model summaries
     │
+    |── configs            <- config files for training and using models
+    |
     ├── notebooks          <- Jupyter notebooks.
     │
     ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
@@ -153,25 +151,11 @@ export PYTHONPATH="${PYTHONPATH}:/workspaces/mine-segmentation"
     │
     |── environments       <- environment.yml files
     │
-    ├── setup.py           <- makes project pip installable (pip install -e .) so src can be imported
     ├── src                <- Source code for use in this project.
-    │   ├── __init__.py    <- Makes src a Python module
-    │   │
-    │   ├── data           <- Scripts to download or generate data
-    │   │   └── make_dataset.py
-    │   │
-    │   ├── features       <- Scripts to turn raw data into features for modeling
-    │   │   └── build_features.py
-    │   │
-    │   ├── models         <- Scripts to train models and then use trained models to make
-    │   │   │                 predictions
-    │   │   ├── predict_model.py
-    │   │   └── train_model.py
-    │   │
-    │   └── visualization  <- Scripts to create exploratory and results oriented visualizations
-    │       └── visualize.py
-    │
-    └── tox.ini            <- tox file with settings for running tox; see tox.readthedocs.io
-
-
+        ├── __init__.py    <- Makes src a Python module
+        │
+        ├── data           <- Scripts to download or generate data
+        ├── features       <- Scripts to turn raw data into features for modeling
+        ├── models         <- Scripts to train models and then use trained models to make predictions
+        └── visualization  <- Scripts to create exploratory and results oriented visualizations
 --------

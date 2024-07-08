@@ -3,9 +3,6 @@
 The `Segmentor` class is designed for semantic segmentation tasks, extracting feature maps from intermediate layers of the Clay Encoder and adding a Feature Pyramid Network (FPN) on top of it.
 
 Decoder is inspired by the Segformer paper.
-Todo:
-- Add neck & head for segmentation task from other papers like UperNet, PPANet, etc. to compare with other GeoAI models.
-
 
 ## Parameters
 
@@ -14,59 +11,32 @@ Todo:
 
 ## Example
 
-In this example, we will use the `Segmentor` class to segment Land Use Land Cover (LULC) classes for the Chesapeake Bay CVPR dataset. The implementation includes data preprocessing, data loading, and model training workflow using PyTorch Lightning.
+Here, the `Segmentor` class is used to segment the custom created dataset of mining areas. The implementation includes data preprocessing, data loading, and model training workflow using PyTorch Lightning.
 
 ## Dataset
 
-### Citation
-
-If you use this dataset, please cite the associated manuscript:
-
-Robinson C, Hou L, Malkin K, Soobitsky R, Czawlytko J, Dilkina B, Jojic N.
-Large Scale High-Resolution Land Cover Mapping with Multi-Resolution Data.
-Proceedings of the 2019 Conference on Computer Vision and Pattern Recognition (CVPR 2019).
-
-Dataset URL: [Chesapeake Bay Land Cover Dataset](https://lila.science/datasets/chesapeakelandcover)
-
 ## Setup
 
-Follow the instructions in the [README](../../README.md) to install the required dependencies.
-
-```bash
-git clone <repo-url>
-cd model
-mamba env create --file environment.yml
-mamba activate claymodel
-```
+Follow the instructions in the [README](../../README.md) to install the required dependencies. Use the `environment-clay.yml` file to set up the environment.
 
 ## Usage
 
 ### Preparing the Dataset
+Check the configurations in the file `make_dataset_post.py`, and create the dataset with: 
 
-Download the Chesapeake Bay Land Cover dataset and organize your dataset directory as recommended.
-
-1. Copy `*_lc.tif` and `*_naip-new.tif` files for segmentation downstream tasks using s5cmd:
-   ```bash
-   # train
-   s5cmd cp --include "*_lc.tif" --include "*_naip-new.tif" "s3://us-west-2.opendata.source.coop/agentmorris/lila-wildlife/lcmcvpr2019/cvpr_chesapeake_landcover/ny_1m_2013_extended-debuffered-train_tiles/*" data/cvpr/files/train/
-
-   # val
-   s5cmd cp --include "*_lc.tif" --include "*_naip-new.tif" "s3://us-west-2.opendata.source.coop/agentmorris/lila-wildlife/lcmcvpr2019/cvpr_chesapeake_landcover/ny_1m_2013_extended-debuffered-val_tiles/*" data/cvpr/files/val/
-   ```
-
-2. Create chips of size `224 x 224` to feed them to the model:
-    ```bash
-    python finetune/segment/preprocess_data.py data/cvpr/files data/cvpr/ny 224
-    ```
+```bash
+python src/data/make_dataset_post.py
+```
 
 Directory structure:
+
 ```
-data/
-└── cvpr/
+data/processed/
+└── images/
     ├── files/
     │   ├── train/
     │   └── val/
-    └── ny/
+    └── chips/
         ├── train/
         │   ├── chips/
         │   └── labels/
@@ -77,9 +47,13 @@ data/
 
 ### Training the Model
 
-The model can be run via LightningCLI using configurations in `finetune/segment/configs/segment_chesapeake.yaml`.
+The model can be run via LightningCLI using configurations in `configs/clay_segment_config_gpu.yaml` or `configs/clay_segment_config_gpu.yaml`.
 
-1. Download the Clay model checkpoint from [Huggingface model hub](https://huggingface.co/made-with-clay/Clay/blob/main/clay-v1-base.ckpt) and save it in the `checkpoints/` directory.
+1. Download the Clay model checkpoint from [Huggingface model hub](https://huggingface.co/made-with-clay/Clay/blob/main/clay-v1-base.ckpt) and save it in the `models/` directory.
+
+```bash
+python src/models/clay/download_checkpoint.py
+```
 
 2. Modify the batch size, learning rate, and other hyperparameters in the configuration file as needed:
     ```yaml
@@ -115,11 +89,13 @@ The model can be run via LightningCLI using configurations in `finetune/segment/
     # on CPU
     python src/models/clay/segment.py fit --config configs/clay_segment_config_cpu.yaml
 
-    # on GPU (maybe adjust num_workers)
+    # on GPU
     python src/models/clay/segment.py fit --config configs/clay_segment_config_gpu.yaml
     ```
 
 ## Acknowledgments
+
+Code and scripts for the finetuning of the clay model are modified from https://github.com/Clay-foundation/model/tree/main/finetune/segment. Credits to the authors of the Clay Foundation Model.
 
 Decoder implementation is inspired by the Segformer paper:
 ```
