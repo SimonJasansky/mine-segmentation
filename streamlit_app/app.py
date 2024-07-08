@@ -340,7 +340,7 @@ def main():
 
     with st.sidebar:
         
-        st.radio("Select Year", list(range(2016, 2023)), index=3, key="year")
+        st.radio("Select Year", list(range(2016, 2022)), index=3, key="year")
         
     st.button("Refresh Tile", on_click=set_random_tile)
 
