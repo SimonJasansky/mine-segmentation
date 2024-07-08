@@ -3,7 +3,7 @@ r"""
 Example:
 
 ```bash
-python src/data/persist_pixels_masks.py data/processed/files preferred_polygons --limit 25
+python src/data/persist_pixels_masks.py data/processed/files preferred_polygons --limit 25 --train_ratio 0.8 --only_valid_surface_mines
 ```
 
 """
@@ -47,6 +47,13 @@ def process_row(
     bounds = row.geometry.bounds
     lat = row.geometry.centroid.y
     lon = row.geometry.centroid.x
+    img_path = output_path + f"/{row.tile_id}_{row.s2_tile_id}_img.tif"
+    mask_path = output_path + f"/{row.tile_id}_{row.s2_tile_id}_mask.tif"
+
+    # check if the image already exists
+    if os.path.exists(img_path) and os.path.exists(mask_path):
+        print(f"Image and mask already exist for tile {row.tile_id}")
+        return
 
     item = stac_reader.get_item_by_name(row.s2_tile_id, bbox=bounds)
 
@@ -61,7 +68,7 @@ def process_row(
     )
 
     # persist to disk
-    stac_reader.save_stack_as_geotiff(stack, output_path + f"/{row.tile_id}_{row.s2_tile_id}_img.tif")
+    stac_reader.save_stack_as_geotiff(stack, img_path)
 
     # read the mask 
     tile_id = row.tile_id
@@ -70,10 +77,16 @@ def process_row(
     # convert to same crs as stack
     poly = poly.to_crs(stack.crs)
 
-    mask_raster = rasterio.features.rasterize(poly, out_shape=(2048,2048), transform=stack.rio.transform())
+    if len(poly) == 0:
+        print(f"No mask found for tile {tile_id}, removing image")
+        # remove the image if no mask is found
+        os.remove(img_path)
+        return
+    else:
+        mask_raster = rasterio.features.rasterize(poly, out_shape=(2048,2048), transform=stack.rio.transform())
 
     # save the mask
-    with rasterio.open(output_path + f"/{row.tile_id}_{row.s2_tile_id}_mask.tif", 'w', driver='GTiff', 
+    with rasterio.open(mask_path, 'w', driver='GTiff', 
                        height=2048, width=2048, count=1, dtype=np.uint8, crs=stack.crs, transform=stack.rio.transform()) as dst:
         dst.write(mask_raster, 1)
 
@@ -84,15 +97,20 @@ if __name__ == "__main__":
     parser.add_argument("polygon_layer", type=str, help="Name of the polygon layer in the dataset")
     parser.add_argument("--limit", type=int, help="Limit the number of rows to process")
     parser.add_argument("--train_ratio", type=float, default=0.8, help="Ratio of data to use for training (default: 0.8)")
+    parser.add_argument("--only_valid_surface_mines", action="store_true", help="Only process valid surface mines, and ignore rejected tiles, and and tiles with brine & evaporation ponds")
     args = parser.parse_args()
     output_path = args.output_path
     polygon_layer = args.polygon_layer
     limit = args.limit
     train_ratio = args.train_ratio
+    only_valid_surface_mines = args.only_valid_surface_mines
 
     # Load the dataset
     tiles = gpd.read_file(DATASET_PROCESSED, layer="tiles")
     masks = gpd.read_file(DATASET_PROCESSED, layer=polygon_layer)
+
+    if only_valid_surface_mines:
+        tiles = tiles[(tiles["source_dataset"] != "rejected") & (tiles["minetype1"] == "Surface")]
 
     # Set the limit to the length of the tiles dataframe if not provided
     if limit is None:
@@ -108,10 +126,6 @@ if __name__ == "__main__":
 
     print(f"Processing {len(train_tiles)} rows for train set")
     print(f"Processing {len(val_tiles)} rows for val set")
-
-    # check if the directory exists and remove it
-    if os.path.exists(output_path):
-        os.system(f"rm -r {output_path}")
 
     # make the directories for train and val
     os.makedirs(output_path + "/train", exist_ok=True)

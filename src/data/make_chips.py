@@ -129,6 +129,10 @@ def main():
         print("Purging chips that do not contain mining area")
         purge_chips(output_dir / "train/chips", output_dir / "train/labels")
         purge_chips(output_dir / "val/chips", output_dir / "val/labels")
+    
+    print(f"Chips saved to {output_dir}")
+    print(f"Nr. Train chips: {len(list((output_dir / 'train' / 'chips').glob('*.npy')))}")
+    print(f"Nr. Val chips: {len(list((output_dir / 'val' / 'chips').glob('*.npy')))}")
 
 if __name__ == "__main__":
     main()
