@@ -1,14 +1,15 @@
 import streamlit as st
+st.set_page_config(layout="wide")
 import geopandas as gpd
 import pandas as pd
 import shapely
 import os
-import pystac
 
 from src.data.get_satellite_images import ReadSTAC
 from src.utils import calculate_dimensions_km
 
 import leafmap.foliumap as leafmap
+# from streamlit_folium import st_folium
 
 TILES = "data/interim/tiles.gpkg"
 MAUS_POLYGONS = "data/external/maus_mining_polygons.gpkg"
@@ -60,6 +61,7 @@ def load_data():
 
     # Initialize the STAC reader
     api_url="https://planetarycomputer.microsoft.com/api/stac/v1"
+    
     stac_reader = ReadSTAC(
         api_url=api_url, 
         collection = "sentinel-2-l2a",
@@ -96,8 +98,29 @@ def set_random_tile():
     st.session_state.preferred_dataset = None
     st.session_state.satellite = False
 
+@st.cache_data
+def load_least_cloudy_item(_stac_reader, bbox, year):
+    
+    # get the least cloudy sentinel image for the tile
+    items = _stac_reader.get_items(
+        bbox=bbox,
+        timerange=f'{year}-01-01/{year}-12-31',
+        max_cloud_cover=15
+    )
 
-def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
+    if len(items) < 1: 
+        st.error("No S2 images found for this tile. Please refresh the tile or change to another year.")
+
+    try:
+        # Get the least cloudy images
+        least_cloudy_item = _stac_reader.filter_item(items, "least_cloudy", full_overlap=True)
+    except ValueError:
+        st.error("A ValueError occurred. No S2 images that fully overlap with this tile are found. Please refresh the tile.")
+
+    return least_cloudy_item
+
+
+def visualize_tile(tile, maus_gdf, tang_gdf, least_cloudy_item):
     """
     Visualize a tile.
 
@@ -105,8 +128,8 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
         tile (GeoDataFrame): Tile to visualize.
         maus_gdf (GeoDataFrame): Maus dataset.
         tang_gdf (GeoDataFrame): Tang dataset.
-        stac_reader (ReadSTAC): STAC reader.
-        year (int): Year to filter the images.
+        least_cloudy_item (Item): Least cloudy Sentinel-2 item.
+        edit_mode (bool): Whether to enable edit mode.
 
     Returns:
         Tuple: A tuple containing the filtered Maus dataset, filtered Tang dataset, and the Sentinel-2 tile ID.
@@ -128,24 +151,6 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
         width_km, height_km = calculate_dimensions_km(tile_geometry)
         st.write(f"Tile extents: {width_km:.2f} km x {height_km:.2f} km")
 
-
-    # get the least cloudy sentinel image for the tile
-    items = stac_reader.get_items(
-        bbox=bbox,
-        timerange=f'{year}-01-01/{year}-12-31',
-        max_cloud_cover=15
-    )
-
-    if len(items) < 1: 
-        st.error("No S2 images found for this tile. Please refresh the tile or change to another year.")
-
-    try:
-        # Get the least cloudy images
-        least_cloudy_item = stac_reader.filter_item(items, "least_cloudy", full_overlap=True)
-    except ValueError:
-        st.error("A ValueError occurred. No S2 images that fully overlap with this tile are found. Please refresh the tile.")
-
-
     with col3:
         # Display the cloud coverage
         st.write(f"Cloud coverage: {least_cloudy_item.properties['eo:cloud_cover']}%")
@@ -163,6 +168,11 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
         if st.checkbox("Add Google High-Res Satellite Imagery", key="satellite", value=False):
             m.add_basemap("SATELLITE")
 
+        if st.checkbox("Edit Mode", key="edit_mode", value=False):
+            edit_mode = True
+        else:
+            edit_mode = False
+    
     m.add_cog_layer(url, name="Sentinel-2")
     
     # visualize the tile boundaries
@@ -214,9 +224,13 @@ def visualize_tile(tile, maus_gdf, tang_gdf, stac_reader, year):
     if not tang_gdf_filtered.empty:
         m.add_gdf(tang_gdf_filtered, layer_name="tang_gdf", style=style_tang)
 
-    m.to_streamlit()
+    if edit_mode:
+        st_data = m.to_streamlit(width=1000, height=800, bidirectional=True)
+    else:
+        m.to_streamlit(width=1000, height=800, bidirectional=False)
+        st_data = None
 
-    return maus_gdf_filtered, tang_gdf_filtered, s2_tile_id
+    return maus_gdf_filtered, tang_gdf_filtered, s2_tile_id, st_data
 
 
 def accept_polygons(
@@ -345,8 +359,11 @@ def main():
     st.button("Refresh Tile", on_click=set_random_tile)
 
     # Visualize the tile
-    maus_gdf_filtered, tang_gdf_filtered, s2_tile_id = visualize_tile(st.session_state.tile, maus_gdf, tang_gdf, stac_reader, st.session_state.year)
-    
+    least_cloudy_item = load_least_cloudy_item(stac_reader, st.session_state.tile["geometry"].values[0].bounds, st.session_state.year)
+    maus_gdf_filtered, tang_gdf_filtered, s2_tile_id, st_data = visualize_tile(st.session_state.tile, maus_gdf, tang_gdf, least_cloudy_item)
+
+    # st_data
+
     ### Options ###
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -358,7 +375,7 @@ def main():
                 index=None, key="preferred_dataset")
     with col2:
         # Add horizontal radio button for mine type 1
-        st.radio("Mine Type 1", ["Surface", "Brine & Evaporation Pond"], index=0, key="minetype1")
+        st.radio("Mine Type 1", ["Surface", "Brine & Evaporation Pond", "Underground"], index=0, key="minetype1")
     with col3:
         # Add horizontal radio button for mine type 2
         st.radio("Mine Type 2", ["Industrial", "Artisanal"], index=None, key="minetype2")
