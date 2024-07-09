@@ -1,10 +1,11 @@
-from samgeo import split_raster
+from samgeo import split_raster, array_to_image
 from samgeo.text_sam import LangSAM
 import os
 import torch
 import numpy as np
 from PIL import Image
 import glob
+import rasterio
 
 from src.data.get_satellite_images import ReadSTAC
 from src.visualization.visualize import plot_multiple_masks_on_images, plot_mask_on_image, plot_S2_geotiff_rgb
@@ -14,41 +15,36 @@ from src.utils import geotiff_to_PIL, normalize_geotiff, merge_geotiffs
 class MineSamGeo:
     def __init__(
         self, 
+        chips_dir,
+        output_dir,
         model_type="vit_h", 
-        chips_dir=None, 
-        output_dir=None,
-        interim_dir=None,
     ):
         self.model = LangSAM(model_type=model_type)
         self.chips_dir = chips_dir
         self.output_dir = output_dir
-        self.interim_dir = interim_dir
 
-    def load_chip(self, idx):
-        """
-        Load chip (np.array) from chip dir, normalize, and return PIL image
-        """
-        # get all files in chip dir
-        chip_files = glob.glob(os.path.join(self.chips_dir, "*.npy"))
+        chip_files = glob.glob(os.path.join(self.chips_dir, "*.tif"))
+        self.chip_files = chip_files
+        self.num_chips = len(chip_files)
 
-        if idx >= len(chip_files):
+
+    def get_chip_path(self, idx):
+        """
+        Load normalized chip path (.tif) from chip dir
+        """
+
+        if idx >= len(self.chip_files):
             raise ValueError("Index out of range")
         
-        # load chip
-        chip_array = np.load(chip_files[idx])
+        # load chip path
+        chip_path = self.chip_files[idx]
+        self.model.source = chip_path
 
-        # normalize chip
-        chip_array = (chip_array - chip_array.min()) / (chip_array.max() - chip_array.min()) * 255
-        chip_array = chip_array.astype(np.uint8)
-
-        # convert to PIL image
-        chip_pil = Image.fromarray(chip_array.transpose(1, 2, 0))
-
-        return chip_pil
+        return chip_path
 
     def predict_dino(
         self, 
-        chip,
+        chip_path,
         text_prompt, 
         box_threshold, 
         text_threshold,
@@ -57,7 +53,7 @@ class MineSamGeo:
         Predict on chip using DINO model
 
         Args:
-            chip (Image): Input PIL Image.
+            chip_path (str): Path to the chip (.tif)
             text_prompt (str): Text prompt for model
             box_threshold (float): Threshold for bounding box
             text_threshold (float): Threshold for text
@@ -65,22 +61,95 @@ class MineSamGeo:
         Returns:
             tuple: Tuple containing boxes, logits, and phrases.
         """
-        # get bounds of the chip
-        chip_bounds = chip.bounds
+
+        # Load the georeferenced image
+        with rasterio.open(chip_path) as src:
+            chip_np = src.read().transpose(
+                (1, 2, 0)
+            )  # Convert rasterio image to numpy array
+            self.model.transform = src.transform  # Save georeferencing information
+            self.model.crs = src.crs  # Save the Coordinate Reference System
+            chip_pil = Image.fromarray(
+                chip_np[:, :, :3]
+            )  # Convert numpy array to PIL image, excluding the alpha channel
 
         # predict
-        prediction = self.model.predict_dino(chip, text_prompt, box_threshold, text_threshold)
+        boxes, logits, phrases = self.model.predict_dino(
+            chip_pil, text_prompt, box_threshold, text_threshold
+        )
 
-        # filter out large boxes that are almost the size of the image
-        boxes = prediction["boxes"].tolist()
-        coords = rowcol_to_xy(self.source, boxes=boxes, dst_crs=dst_crs, **kwargs)
+        # filter out bounding boxes that are almost the size of the image
+        w, h = chip_pil.size
+        boxes = boxes.tolist()
+        logits = logits.tolist()
 
+        for i, box in enumerate(boxes):
+            # check if first two coords are within 5% of image size, and last two coords are within 95% of image size
+            if box[0] < 0.05 * w and box[1] < 0.05 * h and box[2] > 0.95 * w and box[3] > 0.95 * h:
+                boxes.pop(i)
+                logits.pop(i)
+                phrases.pop(i)
 
+        boxes = torch.tensor(boxes)
+        logits = torch.tensor(logits)
 
+        self.chip_np = chip_np
+        self.chip_pil = chip_pil
+        self.boxes = boxes
+        self.logits = logits
+        self.phrases = phrases
 
-        return prediction
+        return boxes, logits, phrases
 
     def predict_sam(self):
+        
+        dtype=np.uint8
+        mask_multiplier=255
+        output=None
+
+        masks = torch.tensor([])
+        if len(self.boxes) > 0:
+            masks = self.model.predict_sam(self.chip_pil, self.boxes)
+            masks = masks.squeeze(1)
+
+        if self.boxes.nelement() == 0:  # No "object" instances found
+            print("No objects found in the image.")
+            return
+        else:
+            # Create an empty image to store the mask overlays
+            mask_overlay = np.zeros_like(
+                self.chip_np[..., 0], dtype=dtype
+            )  # Adjusted for single channel
+
+            for i, (box, mask) in enumerate(zip(self.boxes, masks)):
+                # Convert tensor to numpy array if necessary and ensure it contains integers
+                if isinstance(mask, torch.Tensor):
+                    mask = (
+                        mask.cpu().numpy().astype(dtype)
+                    )  # If mask is on GPU, use .cpu() before .numpy()
+                mask_overlay += ((mask > 0) * (i + 1)).astype(
+                    dtype
+                )  # Assign a unique value for each mask
+
+            # Normalize mask_overlay to be in [0, 255]
+            mask_overlay = (
+                mask_overlay > 0
+            ) * mask_multiplier  # Binary mask in [0, 255]
+
+        if output is not None:
+            array_to_image(mask_overlay, output, self.source, dtype=dtype)
+
+        self.masks = masks
+        self.prediction = mask_overlay
+
+        # save predictions to model
+        self.model.masks = masks
+        self.model.boxes = self.boxes
+        self.model.phrases = self.phrases
+        self.model.logits = self.logits
+        self.model.prediction = mask_overlay
+
+    def batch_predict(self):
         pass
 
     def show_results(self):
