@@ -6,6 +6,8 @@ import numpy as np
 from PIL import Image
 import glob
 import rasterio
+from pathlib import Path
+
 
 from src.data.get_satellite_images import ReadSTAC
 from src.visualization.visualize import plot_multiple_masks_on_images, plot_mask_on_image, plot_S2_geotiff_rgb
@@ -16,13 +18,14 @@ class MineSamGeo:
     def __init__(
         self, 
         chips_dir,
+        mask_dir,
         output_dir,
         model_type="vit_h", 
     ):
         self.model = LangSAM(model_type=model_type)
         self.chips_dir = chips_dir
+        self.mask_dir = mask_dir
         self.output_dir = output_dir
-
         chip_files = glob.glob(os.path.join(self.chips_dir, "*.tif"))
         self.chip_files = chip_files
         self.num_chips = len(chip_files)
@@ -90,22 +93,36 @@ class MineSamGeo:
                 logits.pop(i)
                 phrases.pop(i)
 
+            # also remove very large boxes that cover more than 75% of the image
+            elif (box[2] - box[0]) * (box[3] - box[1]) > 0.75 * w * h:
+                boxes.pop(i)
+                logits.pop(i)
+                phrases.pop(i)
+
         boxes = torch.tensor(boxes)
         logits = torch.tensor(logits)
 
         self.chip_np = chip_np
         self.chip_pil = chip_pil
+        self.model.image = chip_pil
         self.boxes = boxes
         self.logits = logits
         self.phrases = phrases
 
         return boxes, logits, phrases
 
-    def predict_sam(self):
-        
-        dtype=np.uint8
-        mask_multiplier=255
-        output=None
+    def predict_sam(self, dtype=np.uint8, mask_multiplier=255, output=None):
+        """
+        Predict on chip using SAM model
+
+        Args:
+            dtype (numpy.dtype, optional): Data type for the mask overlay. Defaults to np.uint8.
+            mask_multiplier (int, optional): Multiplier for the mask overlay. Defaults to 255.
+            output (str, optional): Path to save the mask overlay image. Defaults to None.
+
+        Returns:
+            None
+        """
 
         masks = torch.tensor([])
         if len(self.boxes) > 0:
@@ -149,10 +166,48 @@ class MineSamGeo:
         self.model.logits = self.logits
         self.model.prediction = mask_overlay
 
+    def predict(self, chip_path, text_prompt, box_threshold, text_threshold):
+        """
+        Predict on chip using DINO and SAM models
+
+        Args:
+            chip_path (str): Path to the chip (.tif)
+            text_prompt (str): Text prompt for model
+            box_threshold (float): Threshold for bounding box
+            text_threshold (float): Threshold for text
+
+        Returns:
+            None
+        """
+
+        # predict with DINO
+        boxes, logits, phrases = self.predict_dino(chip_path, text_prompt, box_threshold, text_threshold)
+
+        # predict with SAM
+        self.predict_sam()
+
+    def show_preds_and_mask(self, chip_path):
+        # first, plot the predictions
+        self.model.show_anns(
+            cmap="Blues",
+            box_color="red",
+            title="Automatic Segmentation of Mining Areas",
+            blend=True,
+            alpha=0.1
+            )
+
+        # then, plot the mask
+        # get mask path
+        mask_path = Path(chip_path).stem.replace("_img", "_mask")
+        mask_path = os.path.join(self.mask_dir, mask_path) + ".tif"
+        
+        # show the mask
+        # TODO 
+
     def batch_predict(self):
         pass
 
-    def show_results(self):
+    def show_results_batch(self):
         pass
 
     def batch_metrics(self):
