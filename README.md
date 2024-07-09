@@ -114,7 +114,7 @@ python src/data/make_dataset_post.py
 To ensure relative imports work as expected, we can set the pythonpath manually. That's a bit of a hacky solution, but works for now.
 
 ```bash
-export PYTHONPATH="${PYTHONPATH}:/workspaces/mine-segmentation"
+export PYTHONPATH="${PYTHONPATH}:/mine-segmentation"
 ```
 
 ## Acknowledgements
