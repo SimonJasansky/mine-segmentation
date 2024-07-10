@@ -111,3 +111,5 @@ models/
 wandb/
 
 config.yaml
+
+/reports
