@@ -36,6 +36,7 @@ dependencies:
   - zarr~=2.16.1
   - leafmap
   - streamlit
+  - seaborn
   - pip
   - pip:
     - segmentation-models-pytorch

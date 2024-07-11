@@ -24,22 +24,21 @@ class MineSamGeo:
     Wrapper class for the SamGeo model
     """
     def __init__(
-        self, 
+        self,
         chips_dir,
         mask_dir,
         output_dir,
-        model_type="vit_h", 
+        model_type="vit_h",
     ):
         """
         Initialize the model
 
         Args:
-            chips_dir (str): Path to the chips directory. Chips must be normalized already. 
+            chips_dir (str): Path to the chips directory. Chips must be normalized already.
             mask_dir (str): Path to the mask directory
             output_dir (str): Path to the output directory
             model_type (str, optional): Type of model to use. Defaults to "vit_h".
         """
-        
         self.model = LangSAM(model_type=model_type)
         self.chips_dir = chips_dir
         self.mask_dir = mask_dir
@@ -61,12 +60,12 @@ class MineSamGeo:
 
     def get_chip_path(self, idx):
         """
-        Load path of one chip (.tif) from chip dir. 
+        Load path of one chip (.tif) from chip dir.
         """
 
         if idx >= len(self.chip_files):
             raise ValueError("Index out of range")
-        
+
         # load chip path
         chip_path = self.chip_files[idx]
         self.model.source = chip_path
@@ -80,7 +79,7 @@ class MineSamGeo:
         if chip_path is None:
             print("Please run predict() first.")
             return
-        
+
         # get mask path
         mask_path = str(Path(self.mask_dir) / f"{Path(chip_path).stem}.tif")
 
@@ -91,11 +90,12 @@ class MineSamGeo:
 
 
     def predict_dino(
-        self, 
+        self,
         chip_path,
-        text_prompt, 
-        box_threshold, 
+        text_prompt,
+        box_threshold,
         text_threshold,
+        box_size_threshold=0.5,
     ):
         """
         Predict on chip using DINO model
@@ -105,6 +105,7 @@ class MineSamGeo:
             text_prompt (str): Text prompt for model
             box_threshold (float): Threshold for bounding box
             text_threshold (float): Threshold for text
+            box_size_threshold (float, optional): max size of bounding box as a fraction of the image. Defaults to 0.5.
 
         Returns:
             tuple: Tuple containing boxes, logits, and phrases.
@@ -139,7 +140,7 @@ class MineSamGeo:
                 indices_to_remove.append(i)
 
             # 2. also remove very large boxes that cover more than x% of the image
-            elif (box[2] - box[0]) * (box[3] - box[1]) > 0.6 * w * h:
+            elif (box[2] - box[0]) * (box[3] - box[1]) > box_size_threshold * w * h:
                 indices_to_remove.append(i)
 
         # Remove the items at the indices
@@ -169,9 +170,9 @@ class MineSamGeo:
 
 
     def predict_sam(
-            self, 
-            dtype=np.uint8, 
-            mask_multiplier=1, 
+            self,
+            dtype=np.uint8,
+            mask_multiplier=1,
             output=None
         ):
         """
@@ -192,7 +193,7 @@ class MineSamGeo:
             masks = masks.squeeze(1)
 
         if self.model.boxes.nelement() == 0:  # No "object" instances found
-            print("No objects found in the image, returning empty mask.")
+            # print("No objects found in the image, returning empty mask.")
             mask_overlay = np.zeros_like(self.chip_np[..., 0], dtype=dtype)
 
         else:
@@ -226,11 +227,12 @@ class MineSamGeo:
 
 
     def predict(
-            self, 
-            chip_path, 
-            text_prompt, 
-            box_threshold, 
+            self,
+            chip_path,
+            text_prompt,
+            box_threshold,
             text_threshold,
+            box_size_threshold=0.5,
             output=None,
         ):
         """
@@ -252,20 +254,21 @@ class MineSamGeo:
 
         # predict with DINO
         boxes, logits, phrases = self.predict_dino(
-            chip_path=chip_path, 
-            text_prompt=text_prompt, 
-            box_threshold=box_threshold, 
-            text_threshold=text_threshold
+            chip_path=chip_path,
+            text_prompt=text_prompt,
+            box_threshold=box_threshold,
+            text_threshold=text_threshold,
+            box_size_threshold=box_size_threshold,
         )
 
         # predict with SAM
         self.predict_sam(
-            dtype=np.uint8, 
-            mask_multiplier=1, 
+            dtype=np.uint8,
+            mask_multiplier=1,
             output=output
         )
 
-    
+
     def reset_model(self):
         """
         Reset the model attributes
@@ -283,7 +286,7 @@ class MineSamGeo:
         self.model.transform = None
         self.model.crs = None
 
-    
+
     def calculate_metrics(self):
         """
         Calculate metrics for the predicted mask
@@ -296,20 +299,35 @@ class MineSamGeo:
 
         mask_pred = self.model.prediction
 
-        # Calculate IoU/JaccardIndex
+        # precision / specificity
+        if mask_pred.sum() == 0 and mask_true.sum() != 0:
+            precision = 0
+        else:
+            precision = (mask_pred & mask_true).sum() / mask_pred.sum()
+
+        # recall / sensitivity
+        recall = (mask_pred & mask_true).sum() / mask_true.sum()
+
+        # accuracy / Rand index
+        accuracy = (mask_pred == mask_true).sum() / mask_pred.size
+
+        # IoU / JaccardIndex
         iou = (mask_pred & mask_true).sum() / (mask_pred | mask_true).sum()
 
-        # Calculate F1 score
+        # F1 score / Dice coefficient
         f1_score = 2 * (mask_pred & mask_true).sum() / (mask_pred.sum() + mask_true.sum())
 
         # Return metrics as dictionary
         metrics = {
-            'iou': iou,
-            'f1_score': f1_score,
+            'precision': round(precision, 4),
+            'recall': round(recall, 4),
+            'accuracy': round(accuracy, 4),
+            'iou': round(iou, 4),
+            'f1_score': round(f1_score, 4),
         }
         return metrics
 
-    
+
     ######################
     ### Visualization ###
     ######################
@@ -354,6 +372,7 @@ class MineSamGeo:
 
         anns = self.model.prediction
         logits = self.model.logits
+        phrases = self.model.phrases
 
         if anns is None:
             print("Please run predict() first.")
@@ -378,9 +397,10 @@ class MineSamGeo:
                     facecolor="none",
                 )
                 plt.gca().add_patch(rect)
-                
-                # Add logits in bottom right corner
-                plt.text(box[2] - 49, box[3] - 12, f"{logits[i]:.2f}", color='white', backgroundcolor=box_color, fontsize=10)
+
+                # Add phrase and logits in top left corner
+                plt.text(box[0] + 5, box[1] - 10, f"{phrases[i]} {logits[i]:.2f}", 
+                         color='white', backgroundcolor=box_color, fontsize=8)
 
         if "dpi" not in kwargs:
             kwargs["dpi"] = 100
@@ -400,15 +420,15 @@ class MineSamGeo:
                 plt.savefig(output, **kwargs)
             else:
                 array_to_image(self.model.prediction, output, self.model.source)
-        
+
         return fig
 
     def show_true_mask(
-        self, 
-        figsize=(12, 10), 
-        axis="off", 
-        title=None, 
-        output=None, 
+        self,
+        figsize=(12, 10),
+        axis="off",
+        title=None,
+        output=None,
         cmap="Blues",
         alpha=1.0,
         blend=True,
@@ -435,7 +455,7 @@ class MineSamGeo:
         if chip_path is None:
             print("Please run predict() first.")
             return
-        
+
         # get mask path
         mask_path = str(Path(self.mask_dir) / f"{Path(chip_path).stem}.tif")
 
@@ -460,15 +480,15 @@ class MineSamGeo:
 
         if output is not None:
             plt.savefig(output, **kwargs)
-        
+
         return fig
 
     def show_pred_vs_true_mask(
-        self, 
-        figsize=(12, 10), 
-        axis="off", 
-        title="", 
-        output=None, 
+        self,
+        figsize=(12, 10),
+        axis="off",
+        title="",
+        output=None,
         alpha=0.4,
         blend=True,
         **kwargs
@@ -489,7 +509,7 @@ class MineSamGeo:
         """
 
         chip_path = self.model.source
-        
+
         # get mask path
         mask_path = self.get_mask_path(chip_path)
 
