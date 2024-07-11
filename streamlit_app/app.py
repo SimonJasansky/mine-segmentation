@@ -85,7 +85,7 @@ def set_random_tile():
     dataset = gpd.read_file(DATASET)
 
     # take only tiles that are not yet in the dataset
-    mining_area_tiles = mining_area_tiles[~mining_area_tiles.index.isin(dataset["tile_id"].values)]
+    mining_area_tiles = mining_area_tiles[~mining_area_tiles.index.isin(dataset["tile_id"].astype(int).values)]    
     random_tile = mining_area_tiles.sample(n=1)
 
     st.session_state.tile = random_tile
