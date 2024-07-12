@@ -5,6 +5,7 @@ from shapely.geometry import mapping, box, shape
 import shapely
 import json
 import os
+import warnings; warnings.filterwarnings('ignore', 'GeoSeries.notna', UserWarning)
 
 DATASET_RAW = "data/raw/mining_tiles_with_masks.gpkg"
 DATASET_PROCESSED = "data/processed/mining_tiles_with_masks_and_bounding_boxes.gpkg"
