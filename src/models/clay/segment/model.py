@@ -8,7 +8,7 @@ import segmentation_models_pytorch as smp
 import torch
 import torch.nn.functional as F
 from torch import optim
-from torchmetrics.classification import F1Score, MulticlassJaccardIndex
+from torchmetrics.classification import BinaryF1Score, BinaryJaccardIndex
 
 from src.models.clay.segment.factory import Segmentor
 
@@ -45,16 +45,9 @@ class MineSegmentor(L.LightningModule):
             ckpt_path=ckpt_path,
         )
 
-        self.loss_fn = smp.losses.FocalLoss(mode="multiclass")
-        self.iou = MulticlassJaccardIndex(
-            num_classes=num_classes,
-            average="weighted",
-        )
-        self.f1 = F1Score(
-            task="multiclass",
-            num_classes=num_classes,
-            average="weighted",
-        )
+        self.loss_fn = smp.losses.JaccardLoss(mode="binary")
+        self.iou = BinaryJaccardIndex()
+        self.f1 = BinaryF1Score()
 
     def forward(self, datacube):
         """
@@ -134,6 +127,9 @@ class MineSegmentor(L.LightningModule):
             mode="bilinear",
             align_corners=False,
         )  # Resize to match labels size
+
+        # Remove the channel dimension if it's 1 (in the masks for binary segmentation)
+        outputs = outputs.squeeze(1)
 
         loss = self.loss_fn(outputs, labels)
         iou = self.iou(outputs, labels)
