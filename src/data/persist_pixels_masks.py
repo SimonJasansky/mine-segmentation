@@ -159,3 +159,47 @@ if __name__ == "__main__":
     # Print the number of rows processed for val set
     print(f"Processed {len(val_tiles)} rows for val set")
 
+    print("Checking for duplicates and removing them if necessary...")
+
+    train_files = os.listdir(output_path + "/train/")
+    val_files = os.listdir(output_path + "/val/")
+
+    # check for duplicate files in the training and validation sets
+    duplicate_files_train = set([x for x in train_files if train_files.count(x) > 1])
+    duplicate_files_val = set([x for x in val_files if val_files.count(x) > 1])
+
+    if len(duplicate_files_train) > 0:
+        for file in duplicate_files_train:
+            os.remove(output_path + "/train/" + file)
+        print(f"Removed {len(duplicate_files_train)} duplicate files from training set")
+    
+    if len(duplicate_files_val) > 0:
+        for file in duplicate_files_val:
+            os.remove(output_path + "/val/" + file)
+        print(f"Removed {len(duplicate_files_val)} duplicate files from validation set")
+
+    # check if there are chips in the validation set that are also in the training set
+    train_val_set_files = set(train_files).intersection(set(val_files))
+    if len(train_val_set_files) > 0:
+        train_val_ratio = len(train_files) / (len(val_files) + len(train_files))
+
+        # if the ratio is less than 0.8, remove the duplicates from the validation set
+        if train_val_ratio < train_ratio:
+            for file in train_val_set_files:
+                os.remove(output_path + "/val/" + file)
+            print(f"Removed {len(train_val_set_files)} duplicate files from validation set")
+        # if the ratio is greater than or equal to 0.8, remove the duplicates from the training set
+        elif train_val_ratio >= train_ratio:
+            for file in train_val_set_files:
+                os.remove(output_path + "/train/" + file)
+            print(f"Removed {len(train_val_set_files)} duplicate files from training set")
+
+    # recalculate the train/val ratio
+    train_files = os.listdir(output_path + "/train/")
+    val_files = os.listdir(output_path + "/val/")
+    train_val_ratio = len(train_files) / (len(val_files) + len(train_files))
+
+    print("Finished processing images and masks")
+    print(f"Train set: {len(train_files)/2} images")
+    print(f"Val set: {len(val_files)/2} images")
+    print(f"Final Train/Val ratio: {train_val_ratio}")
