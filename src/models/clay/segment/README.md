@@ -28,6 +28,8 @@ Check the configurations in the file `make_dataset_post.py`, and create the data
 python src/data/make_dataset_post.py
 ```
 
+Or use custom configurations as outlined in the top-level README
+
 Directory structure:
 
 ```
@@ -90,7 +92,8 @@ python src/models/clay/download_checkpoint.py
     python src/models/clay/segment.py fit --config configs/clay_segment_config_cpu.yaml
 
     # on GPU
-    python src/models/clay/segment.py fit --config configs/clay_segment_config_gpu.yaml
+    python src/models/clay/segment.py fit --config configs/clay_segment_config_gpu_pc.yaml
+    python src/models/clay/segment.py fit --config configs/clay_segment_config_gpu_lightning.yaml
     ```
 
 ## Acknowledgments

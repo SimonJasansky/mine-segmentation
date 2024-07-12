@@ -28,7 +28,7 @@ conda env update --name mineseg-base --file environments/environment.yml --prune
 
 Make sure to replace `mineseg-base` with the desired name for your environment.
 
-1. Additionally, if you want to make the tiles or use the source datasets ([Maus et al.](https://doi.pangaea.de/10.1594/PANGAEA.942325) and [Tang et al.](https://zenodo.org/records/6806817)) you have to install `unrar` using `apt-get`: 
+1. Additionally, if you want to make the tiles or use the source datasets ([Maus et al.](https://doi.pangaea.de/10.1594/PANGAEA.942325) and [Tang et al.](https://zenodo.org/records/6806817)) you have to install `unrar` using `apt-get`:
 
 ```bash
 sudo apt-get install unrar
@@ -37,7 +37,6 @@ sudo apt-get install unrar
 #### Docker
 
 TODO
-
 
 ### Initializing Submodules
 
@@ -57,7 +56,7 @@ These commands will fetch and update the contents of the `clay` submodule direct
 To set up the repo in a Lightning Studio, do this before proceeding with the installation as detailed above:
 
 1. Change the Python version to ``3.11``. Changing Python version can be done on the top right by clicking on "4 CPU".
-2. Clone the repoository: 
+2. Clone the repoository:
 
 ```bash
 git clone https://github.com/SimonJasansky/mine-segmentation.git
@@ -69,8 +68,8 @@ git clone https://github.com/SimonJasansky/mine-segmentation.git
 cd mine-segmentation
 ```
 
-4. Install one of the environments. Here, it is important that in the **command the `--name cloudspace` tag is added**, as Lightning studios only allows one environment (named cloudspace by default). If the `--name cloudspace` flag is not correctly added, conda will try to create a new environment, and Lightning Studios will break. 
-Also, it is **important that the environment.yml file has `name: cloudspace` as the first property**. If not, conda again will try to create a new environment, and Lightning Studios will break. 
+4. Install one of the environments. Here, it is important that in the **command the `--name cloudspace` tag is added**, as Lightning studios only allows one environment (named cloudspace by default). If the `--name cloudspace` flag is not correctly added, conda will try to create a new environment, and Lightning Studios will break.
+Also, it is **important that the environment.yml file has `name: cloudspace` as the first property**. If not, conda again will try to create a new environment, and Lightning Studios will break.
 
 ```bash
 conda env update --name cloudspace --file environments/environment.yml --prune
@@ -90,7 +89,7 @@ code -r .
 To download the extenal datasets, generate global square tiles containing mining areas:
 
 ```bash
-python src/data/make_dataset_pre.py 
+python src/data/make_dataset_pre.py
 ```
 
 ### Running the streamlit app for producing the source dataset
@@ -103,8 +102,23 @@ streamlit run streamlit_app/app.py
 
 ### Postprocess the manually validated dataset, download images, and create chips for model training
 
+To run all post-processing steps with preconfigured settings: 
+
 ```bash
 python src/data/make_dataset_post.py
+```
+
+Individual steps can be run with:
+
+```bash
+# postprocess & generate bounding boxes
+python src/data/postprocess_dataset.py
+
+# download S2 images & create masks
+python src/data/persist_pixels_masks.py data/processed/files preferred_polygons --limit 25 --train_ratio 0.8 --only_valid_surface_mines
+
+# chip images
+python src/data/make_chips.py data/processed/files data/processed/chips 512 npy --must_contain_mining
 ```
 
 ## Other Info
@@ -118,17 +132,20 @@ export PYTHONPATH="${PYTHONPATH}:/mine-segmentation"
 ```
 
 ## Acknowledgements
-This project relies on code and models provided by third party sources. 
+
+This project relies on code and models provided by third party sources.
 Credit for their amazing work goes to:
+
 - Clay
   - Website: https://madewithclay.org/
   - Docs: https://clay-foundation.github.io/model/index.html
-  - Repo: https://github.com/Clay-foundation/model 
+  - Repo: https://github.com/Clay-foundation/model
 - Samgeo
-  - Website & Docs: https://samgeo.gishub.org/ 
-  - Repo: https://github.com/opengeos/segment-geospatial 
+  - Website & Docs: https://samgeo.gishub.org/
+  - Repo: https://github.com/opengeos/segment-geospatial
 
-# Project Organization
+## Project Organization
+
 🚧 Project Organization might not be up to date.
 
 ------------
@@ -139,7 +156,7 @@ Credit for their amazing work goes to:
     │   ├── interim        <- Intermediate data that has been transformed.
     │   ├── processed      <- The final, canonical data sets for modeling.
     │   └── raw            <- The original, immutable data dump, including the manually produced dataset.
-    │ 
+    │
     ├── models             <- Trained and serialized models, model predictions, or model summaries
     │
     |── configs            <- config files for training and using models
