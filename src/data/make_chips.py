@@ -9,9 +9,8 @@ image chips for segmentation tasks.
     python preprocess_data.py <data_dir> <output_dir> <chip_size> <chip_format> [<must_contain_mining>] [<normalize>] 
 
     Examples:
-    python src/data/make_chips.py data/processed/files data/processed/chips 512
-    python src/data/make_chips.py data/processed/files data/processed/chips 512 tif --must_contain_mining
-    python src/data/make_chips.py data/processed/files data/processed/chips 512 tif --normalize
+    python src/data/make_chips.py data/processed/files data/processed/chips 512 npy
+    python src/data/make_chips.py data/processed/files data/processed/chips 1024 tif --must_contain_mining --normalize
 """
 
 
@@ -110,6 +109,7 @@ def purge_chips(chips_dir, labels_dir, chip_format):
         chip_format (str): Format of the chips.
     """
     print(f"Purging chips in {chips_dir} that do not contain mining area")
+    removed_count = 0
     for chip_path in chips_dir.glob(f"*.{chip_format}"):
         label_path = labels_dir / f"{chip_path.stem}.{chip_format}"
         label_path = str(label_path).replace("_img", "_mask")
@@ -119,6 +119,7 @@ def purge_chips(chips_dir, labels_dir, chip_format):
             if np.sum(label) == 0:
                 os.remove(chip_path)
                 os.remove(label_path)
+                removed_count += 1
                 
         if chip_format == "tif":
             with rio.open(label_path) as src:
@@ -126,6 +127,9 @@ def purge_chips(chips_dir, labels_dir, chip_format):
                 if np.sum(label) == 0:
                     os.remove(chip_path)
                     os.remove(label_path)
+                    removed_count += 1
+    
+    print(f"Removed {removed_count} chips")
 
 def main():
     """

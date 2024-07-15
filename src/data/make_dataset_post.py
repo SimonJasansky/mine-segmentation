@@ -11,4 +11,4 @@ if __name__ == '__main__':
     # for CLAY 
     # os.system("python src/data/make_chips.py data/processed/files data/processed/chips 512 npy --must_contain_mining")
     # for SAMGEO
-    os.system("python src/data/make_chips.py data/processed/files data/processed/chips 1024 tif --must_contain_mining")
+    os.system("python src/data/make_chips.py data/processed/files data/processed/chips 1024 tif --must_contain_mining --normalize")
