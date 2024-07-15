@@ -15,10 +15,10 @@ def add_bounding_boxes(row):
         return shapely.geometry.Polygon()
     
     # apply buffer 
-    row.geometry = row.geometry.buffer(0.0001)
+    polygons = row.geometry.buffer(0.0001)
 
     # create the unary union, i.e. merge touching polygons
-    union = unary_union(row.geometry)
+    union = unary_union(polygons)
 
     if isinstance(union, shapely.geometry.multipolygon.MultiPolygon):
         # get list of bounding boxes
