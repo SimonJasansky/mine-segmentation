@@ -77,7 +77,7 @@ def process_row(
     # convert to same crs as stack
     poly = poly.to_crs(stack.crs)
 
-    if len(poly) == 0:
+    if (len(poly) == 0 or poly[0] is None):
         print(f"No mask found for tile {tile_id}, removing image")
         # remove the image if no mask is found
         os.remove(img_path)
