@@ -2,6 +2,18 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "mineseg-clay conda env",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "python": "/home/simonjasansky/miniconda3/envs/mineseg-clay/bin/python",
+            "env": {
+                "PYTHONPATH": "${env:PYTHONPATH}:/mine-segmentation"
+            },
+            "args": ["data/processed/files", "preferred_polygons", "--train_ratio", "0.8", "--only_valid_surface_mines"]
+        },
+        {
             "name": "Python:Streamlit",
             "type": "debugpy",
             "request": "launch",
