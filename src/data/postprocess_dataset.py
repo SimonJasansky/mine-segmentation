@@ -12,9 +12,9 @@ DATASET_PROCESSED = "data/processed/mining_tiles_with_masks_and_bounding_boxes.g
 
 def add_bounding_boxes(row):
     if row.geometry is None:
-        return shapely.geometry.Polygon()
+        return None
     
-    # apply buffer 
+    # apply buffer
     polygons = row.geometry.buffer(0.0001)
 
     # create the unary union, i.e. merge touching polygons
@@ -62,21 +62,24 @@ if __name__ == '__main__':
     # copy Dataset_RAW to location of DATASET_PROCESSED, and rename it
     os.system(f"cp {DATASET_RAW} {DATASET_PROCESSED}")
 
-    # Create combined dataset based on preferred dataset. 
+    # Create combined dataset based on preferred dataset.
     preferred_poly = []
     preferred_bbox = []
 
     for i in range(len(tiles)):
         if tiles.iloc[i,:]["preferred_dataset"] == "none":
-            continue
-        if tiles.iloc[i,:]["preferred_dataset"] == "maus": 
+            # if no preferred dataset is set, use maus as default (should be empty)
+            preferred_poly.append(None)
+            preferred_bbox.append(None)
+        elif tiles.iloc[i,:]["preferred_dataset"] == "maus": 
             preferred_poly.append(maus.iloc[i,:].geometry)
             preferred_bbox.append(maus_bboxes_gdf.iloc[i,:].geometry)
         elif tiles.iloc[i,:]["preferred_dataset"] == "tang":
             preferred_poly.append(tang.iloc[i,:].geometry)
             preferred_bbox.append(tang_bboxes_gdf.iloc[i,:].geometry)
         else:
-            raise ValueError("preferred_dataset must be either 'maus' or 'tang', or 'none'")
+            pref_dataset = tiles.iloc[i,:]['preferred_dataset']
+            raise ValueError(f"preferred_dataset must be either 'maus' or 'tang', or 'none', but got {pref_dataset}")
         
     preferred_polygons = gpd.GeoDataFrame(geometry=preferred_poly, crs=tiles.crs)
     preferred_bboxes = gpd.GeoDataFrame(geometry=preferred_bbox, crs=tiles.crs)

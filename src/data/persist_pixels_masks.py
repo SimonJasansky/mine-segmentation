@@ -47,12 +47,23 @@ def process_row(
     bounds = row.geometry.bounds
     lat = row.geometry.centroid.y
     lon = row.geometry.centroid.x
-    img_path = output_path + f"/{row.tile_id}_{row.s2_tile_id}_img.tif"
-    mask_path = output_path + f"/{row.tile_id}_{row.s2_tile_id}_mask.tif"
+    tile_id = row.tile_id
+    img_path = output_path + f"/{tile_id}_{row.s2_tile_id}_img.tif"
+    mask_path = output_path + f"/{tile_id}_{row.s2_tile_id}_mask.tif"
 
     # check if the image already exists
     if os.path.exists(img_path) and os.path.exists(mask_path):
         print(f"Image and mask already exist for tile {row.tile_id}")
+        return
+    elif os.path.exists(img_path) and not os.path.exists(mask_path):
+        raise FileNotFoundError(f"Image exists but mask does not for tile {row.tile_id}")
+    elif not os.path.exists(img_path) and os.path.exists(mask_path):
+        raise FileNotFoundError(f"Mask exists but image does not for tile {row.tile_id}")
+    
+    # check if the mask is empty
+    poly = masks[masks.tile_id == tile_id].geometry.values
+    if (poly is None or len(poly) == 0 or poly[0] is None):
+        print(f"No mask found for tile {tile_id}, skipping image")
         return
 
     item = stac_reader.get_item_by_name(row.s2_tile_id, bbox=bounds)
@@ -67,25 +78,14 @@ def process_row(
         chunk_size=512,
     )
 
-    # persist to disk
+    # save image
     stac_reader.save_stack_as_geotiff(stack, img_path)
 
-    # read the mask 
-    tile_id = row.tile_id
-    poly = masks[masks.tile_id == tile_id].geometry.values
-
-    # convert to same crs as stack
+    # convert mask to same crs as image
     poly = poly.to_crs(stack.crs)
+    mask_raster = rasterio.features.rasterize(poly, out_shape=(2048,2048), transform=stack.rio.transform())
 
-    if (len(poly) == 0 or poly[0] is None):
-        print(f"No mask found for tile {tile_id}, removing image")
-        # remove the image if no mask is found
-        os.remove(img_path)
-        return
-    else:
-        mask_raster = rasterio.features.rasterize(poly, out_shape=(2048,2048), transform=stack.rio.transform())
-
-    # save the mask
+    # save mask
     with rasterio.open(mask_path, 'w', driver='GTiff', 
                        height=2048, width=2048, count=1, dtype=np.uint8, crs=stack.crs, transform=stack.rio.transform()) as dst:
         dst.write(mask_raster, 1)
@@ -110,8 +110,11 @@ if __name__ == "__main__":
     masks = gpd.read_file(DATASET_PROCESSED, layer=polygon_layer)
 
     if only_valid_surface_mines:
+        len_before = len(tiles)
         tiles = tiles[(tiles["source_dataset"] != "rejected") & (tiles["minetype1"] == "Surface")]
-
+        len_after = len(tiles)
+        print(f"Filtered out {len_before - len_after} rejected tiles and non-surface mines")
+        
     # Set the limit to the length of the tiles dataframe if not provided
     if limit is None:
         limit = len(tiles)
