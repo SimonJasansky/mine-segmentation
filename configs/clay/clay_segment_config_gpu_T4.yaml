@@ -5,9 +5,9 @@ data:
   train_label_dir: data/processed/chips/train/labels/
   val_chip_dir: data/processed/chips/val/chips/
   val_label_dir: data/processed/chips/val/labels/
-  metadata_path: configs/clay_segment_metadata.yaml
-  batch_size: 1
-  num_workers: 8 # Set to number of CPU cores
+  metadata_path: configs/clay/clay_segment_metadata.yaml
+  batch_size: 8
+  num_workers: 8 # Set to 2number of CPU cores
   platform: sentinel-2-l2a
 model:
   num_classes: 1
@@ -17,19 +17,19 @@ model:
     - 7
     - 11
   ckpt_path: models/clay-v1-base.ckpt
-  lr: 1e-5 # learning rate
-  wd: 0.05 # weight decay
-  b1: 0.9 # beta1
-  b2: 0.95 # beta2
+  lr: 1e-5
+  wd: 0.05
+  b1: 0.9
+  b2: 0.95
 trainer:
   accelerator: auto
   strategy: ddp
   devices: auto
   num_nodes: 1
   precision: 16-mixed
-  log_every_n_steps: 1
+  log_every_n_steps: 4
   max_epochs: 10
-  accumulate_grad_batches: 4
+  accumulate_grad_batches: 1
   default_root_dir: src/models/clay
   fast_dev_run: False
   num_sanity_val_steps: 0
@@ -37,7 +37,7 @@ trainer:
     - class_path: lightning.pytorch.loggers.WandbLogger
       init_args:
         entity: s-jasansky-Maastricht University
-        project: mine-segmentation
+        project: mine-segmentation-clay
         log_model: false
   callbacks:
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint

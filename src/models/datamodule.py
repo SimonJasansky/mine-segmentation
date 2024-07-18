@@ -4,13 +4,6 @@ DataModule for the Mining dataset for segmentation tasks.
 This implementation provides a structured way to handle the data loading and
 preprocessing required for training and validating a segmentation model.
 
-Dataset citation:
-Robinson C, Hou L, Malkin K, Soobitsky R, Czawlytko J, Dilkina B, Jojic N.
-Large Scale High-Resolution Land Cover Mapping with Multi-Resolution Data.
-Proceedings of the 2019 Conference on Computer Vision and Pattern Recognition
-(CVPR 2019).
-
-Dataset URL: https://lila.science/datasets/chesapeakelandcover
 """
 
 import re

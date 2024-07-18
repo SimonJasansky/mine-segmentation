@@ -89,12 +89,12 @@ python src/models/clay/download_checkpoint.py
 4. Train the model:
     ```bash
     # on CPU
-    python src/models/clay/segment.py fit --config configs/clay_segment_config_cpu.yaml
+    python src/models/clay/segment.py fit --config configs/clay/clay_segment_config_cpu.yaml
 
     # on GPU
-    python src/models/clay/segment.py fit --config configs/clay_segment_config_gpu_pc.yaml
-    python src/models/clay/segment.py fit --config configs/clay_segment_config_gpu_T4.yaml
-    python src/models/clay/segment.py fit --config configs/clay_segment_config_gpu_L4.yaml
+    python src/models/clay/segment.py fit --config configs/clay/clay_segment_config_gpu_pc.yaml
+    python src/models/clay/segment.py fit --config configs/clay/clay_segment_config_gpu_T4.yaml
+    python src/models/clay/segment.py fit --config configs/clay/clay_segment_config_gpu_L4.yaml
     ```
 
 ## Acknowledgments

@@ -3,7 +3,7 @@ Command line interface to run the neural network model!
 
 From the project root directory, do:
 
-    python src/models/clay/segment.py fit --config configs/clay_segment_config.yaml
+    python src/models/clay/segment.py fit --config configs/clay/clay_segment_config.yaml
 
 References:
 - https://lightning.ai/docs/pytorch/2.1.0/cli/lightning_cli.html
@@ -12,7 +12,7 @@ References:
 
 from lightning.pytorch.cli import LightningCLI
 
-from segment.datamodule import MineDataModule 
+from ..datamodule import MineDataModule 
 from segment.model import MineSegmentor
 
 
