@@ -10,7 +10,7 @@ data:
   num_workers: 4 # Set to number of CPU cores
   platform: sentinel-2-l2a
 model:
-  num_classes: 2
+  num_classes: 1
   feature_maps:
     - 3
     - 5
@@ -26,7 +26,7 @@ trainer:
   strategy: ddp
   devices: auto
   num_nodes: 1
-  precision: bf16-mixed
+  precision: 16-mixed
   log_every_n_steps: 1
   max_epochs: 10
   accumulate_grad_batches: 1
@@ -48,7 +48,7 @@ trainer:
         monitor: val/iou
         mode: max
         save_last: True
-        save_top_k: 2
+        save_top_k: 1
         save_weights_only: True
         verbose: True
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor

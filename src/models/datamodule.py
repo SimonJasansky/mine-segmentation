@@ -93,7 +93,7 @@ class MineDataset(Dataset):
 
 class MineDataModule(L.LightningDataModule):
     """
-    DataModule class for the Chesapeake Bay dataset.
+    DataModule class for the Mine dataset.
 
     Args:
         train_chip_dir (str): Directory containing training image chips.

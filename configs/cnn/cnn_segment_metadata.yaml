@@ -1,0 +1,23 @@
+sentinel-2-l2a:
+  band_order:
+    - B02
+    - B03
+    - B04
+  rgb_indices:
+    - 2
+    - 1
+    - 0
+  gsd: 10
+  bands:
+    mean:
+      B02: 1105.
+      B03: 1355.
+      B04: 1552.
+    std:
+      B02: 1809.
+      B03: 1757.
+      B04: 1888.
+    wavelength:
+      B02: 0.493
+      B03: 0.56
+      B04: 0.665

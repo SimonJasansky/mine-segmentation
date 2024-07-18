@@ -8,16 +8,6 @@ import torch
 import torch.nn.functional as F
 from torch import optim
 from torchmetrics.classification import BinaryF1Score, BinaryJaccardIndex
-from segmentation_models_pytorch.encoders import get_preprocessing_fn
-
-preprocess_input = get_preprocessing_fn('resnet34', pretrained='imagenet')
-
-model = smp.Unet(
-    encoder_name="resnet34",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
-    encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
-    in_channels=3,                  # model input channels
-    classes=2,                      # model output channels (number of classes in your dataset)
-)
 
 class MineSegmentorCNN(L.LightningModule):
     """
@@ -33,41 +23,46 @@ class MineSegmentorCNN(L.LightningModule):
 
     def __init__( 
         self,
-        model,
+        arch,
+        encoder_name,
+        encoder_weights,
+        in_channels,
+        num_classes,
         lr,
+        wd,
+        b1,
+        b2,
+        **kwargs
     ):
         super().__init__()
         self.save_hyperparameters()  # Save hyperparameters for checkpointing
-        self.model = model
+        self.model = smp.create_model(
+            arch=arch,
+            encoder_name=encoder_name,
+            encoder_weights=encoder_weights,
+            in_channels=in_channels, 
+            classes=num_classes,
+            **kwargs
+        )
 
-        self.loss_fn = smp.losses.JaccardLoss(mode="binary")
+        self.loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
         self.iou = BinaryJaccardIndex()
         self.f1 = BinaryF1Score()
 
-    def forward(self, datacube):
+    def forward(self, image):
         """
         Forward pass through the segmentation model.
 
         Args:
-            datacube (dict): A dictionary containing the input datacube and
-                meta information like time, latlon, gsd & wavelenths.
+            image (tensor): A tensor containing the image data.
 
         Returns:
             torch.Tensor: The segmentation logits.
         """
-        waves = torch.tensor([0.665, 0.56, 0.493])  # Sentinel wavelengths of B04, B03, B02
-        gsd = torch.tensor(10.0)  # Sentinel GSD
 
         # Forward pass through the network
-        return self.model(
-            {
-                "pixels": datacube["pixels"],
-                "time": datacube["time"],
-                "latlon": datacube["latlon"],
-                "gsd": gsd,
-                "waves": waves,
-            },
-        )
+        return self.model(image)
+
 
     def configure_optimizers(self):
         """
@@ -77,58 +72,80 @@ class MineSegmentorCNN(L.LightningModule):
             dict: A dictionary containing the optimizer and scheduler
             configuration.
         """
-        optimizer = optim.AdamW(
-            [
-                param
-                for name, param in self.model.named_parameters()
-                if param.requires_grad
-            ],
-            lr=self.hparams.lr,
-            weight_decay=self.hparams.wd,
-            betas=(self.hparams.b1, self.hparams.b2),
-        )
-        scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
-            optimizer,
-            T_0=1000,
-            T_mult=1,
-            eta_min=self.hparams.lr * 100,
-            last_epoch=-1,
-        )
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "interval": "step",
-            },
-        }
+        # optimizer = optim.AdamW(
+        #     [
+        #         param
+        #         for name, param in self.model.named_parameters()
+        #         if param.requires_grad
+        #     ],
+        #     lr=self.hparams.lr,
+        #     weight_decay=self.hparams.wd,
+        #     betas=(self.hparams.b1, self.hparams.b2),
+        # )
+        # scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        #     optimizer,
+        #     T_0=1000,
+        #     T_mult=1,
+        #     eta_min=self.hparams.lr * 100,
+        #     last_epoch=-1,
+        # )
+        # return {
+        #     "optimizer": optimizer,
+        #     "lr_scheduler": {
+        #         "scheduler": scheduler,
+        #         "interval": "step",
+        #     },
+        # }
+        return torch.optim.Adam(self.parameters(), lr=0.0001)
 
-    def shared_step(self, batch, batch_idx, phase):
+    def shared_step(self, batch, phase):
         """
         Shared step for training and validation.
 
         Args:
             batch (dict): A dictionary containing the batch data.
-            batch_idx (int): The index of the batch.
             phase (str): The phase (train or val).
 
         Returns:
             torch.Tensor: The loss value.
         """
-        labels = batch["label"].long()
-        outputs = self(batch)
-        outputs = F.interpolate(
-            outputs,
-            size=(FILLER, FILLER),
-            mode="bilinear",
-            align_corners=False,
-        )  # Resize to match labels size
+        labels = batch["label"]
+        image = batch["pixels"]
 
-        # Remove the channel dimension if it's 1 (in the masks for binary segmentation)
-        outputs = outputs.squeeze(1)
+        # change image range from [-1, 1] to [0, 1]
+        # image = (image + 1) / 2
 
-        loss = self.loss_fn(outputs, labels)
-        iou = self.iou(outputs, labels)
-        f1 = self.f1(outputs, labels)
+        # switch the first and second dimensions
+        # image = image.permute(1, 0, 2, 3)
+
+        logits_mask = self.forward(image)
+
+        # expand the first dimension of the labels
+        labels = labels.unsqueeze(1)
+
+        print(image.shape, logits_mask.shape, labels.shape)
+        print("Image")
+        print(image)
+        # check max and min values
+        print(image.max(), image.min())
+        # check if there is any nan in the image
+        print(torch.isnan(image).any())
+
+        print("Logits")
+        print(logits_mask)
+
+        # print(labels)
+
+        loss = self.loss_fn(logits_mask, labels)
+
+        # Lets compute metrics for some threshold
+        # first convert mask values to probabilities, then 
+        # apply thresholding
+        prob_mask = logits_mask.sigmoid()
+        pred_mask = (prob_mask > 0.5).float()
+        
+        iou = self.iou(pred_mask, labels)
+        f1 = self.f1(pred_mask, labels)
 
         # Log metrics
         self.log(
@@ -160,7 +177,7 @@ class MineSegmentorCNN(L.LightningModule):
         )
         return loss
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch):
         """
         Training step for the model.
 
@@ -171,9 +188,9 @@ class MineSegmentorCNN(L.LightningModule):
         Returns:
             torch.Tensor: The loss value.
         """
-        return self.shared_step(batch, batch_idx, "train")
+        return self.shared_step(batch, "train")
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch):
         """
         Validation step for the model.
 
@@ -184,4 +201,4 @@ class MineSegmentorCNN(L.LightningModule):
         Returns:
             torch.Tensor: The loss value.
         """
-        return self.shared_step(batch, batch_idx, "val")
+        return self.shared_step(batch, "val")
