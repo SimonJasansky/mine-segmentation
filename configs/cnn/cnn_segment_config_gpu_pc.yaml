@@ -46,7 +46,7 @@ trainer:
         monitor: val/iou
         mode: max
         save_last: True
-        save_top_k: 1
+        save_top_k: 2
         save_weights_only: True
         verbose: True
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
