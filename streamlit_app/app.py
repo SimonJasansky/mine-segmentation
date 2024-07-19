@@ -139,26 +139,8 @@ def visualize_tile(tile, maus_gdf, tang_gdf, least_cloudy_item):
 
     bbox = tile_geometry.bounds
 
-    # create three columns
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        # Display the tile dataframe
-        st.dataframe(pd.DataFrame(tile.drop(columns="geometry")))
-
-    with col2:
-        # project the tile, and calculate the extent
-        width_km, height_km = calculate_dimensions_km(tile_geometry)
-        st.write(f"Tile extents: {width_km:.2f} km x {height_km:.2f} km")
-
-    with col3:
-        # Display the cloud coverage
-        st.write(f"Cloud coverage: {least_cloudy_item.properties['eo:cloud_cover']}%")
-    
     url = least_cloudy_item.assets["visual"].href
     s2_tile_id = least_cloudy_item.id
-
-    st.write(f"Sentinel-2 Tile ID: {s2_tile_id}")
     
     # Create a Map
     m = leafmap.Map(center=[tile_geometry.centroid.y, tile_geometry.centroid.x], zoom=10)
@@ -229,6 +211,24 @@ def visualize_tile(tile, maus_gdf, tang_gdf, least_cloudy_item):
     else:
         m.to_streamlit(width=1000, height=800, bidirectional=False)
         st_data = None
+
+    # create three columns
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        # Display the tile dataframe
+        st.dataframe(pd.DataFrame(tile.drop(columns="geometry")))
+
+    with col2:
+        # project the tile, and calculate the extent
+        width_km, height_km = calculate_dimensions_km(tile_geometry)
+        st.write(f"Tile extents: {width_km:.2f} km x {height_km:.2f} km")
+
+    with col3:
+        # Display the cloud coverage
+        st.write(f"Cloud coverage: {least_cloudy_item.properties['eo:cloud_cover']}%")
+
+    st.write(f"Sentinel-2 Tile ID: {s2_tile_id}")
 
     return maus_gdf_filtered, tang_gdf_filtered, s2_tile_id, st_data
 
@@ -358,53 +358,47 @@ def main():
         
     st.button("Refresh Tile", on_click=set_random_tile)
 
-    # Visualize the tile
-    least_cloudy_item = load_least_cloudy_item(stac_reader, st.session_state.tile["geometry"].values[0].bounds, st.session_state.year)
-    maus_gdf_filtered, tang_gdf_filtered, s2_tile_id, st_data = visualize_tile(st.session_state.tile, maus_gdf, tang_gdf, least_cloudy_item)
+    col1, col2 = st.columns(spec=[0.75, 0.25])
 
-    # st_data
-
-    ### Options ###
-    col1, col2, col3, col4 = st.columns(4)
     with col1:
+        # Visualize the tile
+        least_cloudy_item = load_least_cloudy_item(stac_reader, st.session_state.tile["geometry"].values[0].bounds, st.session_state.year)
+        maus_gdf_filtered, tang_gdf_filtered, s2_tile_id, st_data = visualize_tile(st.session_state.tile, maus_gdf, tang_gdf, least_cloudy_item)
+
+    with col2:
+        
         # Add horizontal radio button for preferred source dataset
         st.radio("Preferred Source Dataset", 
                 [":large_blue_circle: :blue-background[Maus]", 
-                 ":red_circle: :red-background[Tang]", 
-                 "None"], 
+                    ":red_circle: :red-background[Tang]", 
+                    "None"], 
                 index=None, key="preferred_dataset")
-    with col2:
+
         # Add horizontal radio button for mine type 1
         st.radio("Mine Type 1", ["Surface", "Brine & Evaporation Pond", "Underground"], index=0, key="minetype1")
-    with col3:
+
         # Add horizontal radio button for mine type 2
         st.radio("Mine Type 2", ["Industrial", "Artisanal"], index=None, key="minetype2")
-    with col4:
+
         # Add a text input for comments
         st.text_input("Comment", key="comment", placeholder="Comment")
     
-    # Add section separator
-    st.write("---")
+        # Add section separator
+        st.write("---")
 
-    ### Acceptance Buttons ###
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
         if st.button(":large_blue_circle: :blue-background[Accept Maus]", key="maus"):
             accept_polygons(maus_gdf_filtered, tang_gdf_filtered, accepted_source_dataset="maus", s2_tile_id=s2_tile_id)
             st.success("Polygons by Maus (blue) accepted successfully")
 
-    with col2:
         if st.button(":red_circle: :red-background[Accept Tang]", key="tang"):
             accept_polygons(maus_gdf_filtered, tang_gdf_filtered, accepted_source_dataset="tang", s2_tile_id=s2_tile_id)
             st.success("Polygons by Tang (red) accepted successfully")
 
-    with col3:
         # Accept both Maus' and Tang's polygons
         if st.button(":white_check_mark: Accept both", key="both"):
             accept_polygons(maus_gdf_filtered, tang_gdf_filtered, accepted_source_dataset="both", s2_tile_id=s2_tile_id)
             st.success("Both polygons (Maus & Tang) accepted successfully")
 
-    with col4:
         # Reject the tile and the polygons
         if st.button(":x: Reject Tile", key="rejected"):
             accept_polygons(maus_gdf_filtered, tang_gdf_filtered, accepted_source_dataset="rejected", s2_tile_id=s2_tile_id)
