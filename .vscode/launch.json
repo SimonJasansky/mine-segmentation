@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "mineseg-clay conda env",
+            "name": "mineseg-clay conda for data processing scripts",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
@@ -12,6 +12,19 @@
                 "PYTHONPATH": "${env:PYTHONPATH}:/mine-segmentation"
             },
             "args": ["data/processed/files", "preferred_polygons", "--train_ratio", "0.8", "--only_valid_surface_mines"]
+        },
+        {
+            "name": "mineseg-clay for cnn training",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "justMyCode": false,
+            "console": "integratedTerminal",
+            "python": "/home/simonjasansky/miniconda3/envs/mineseg-clay/bin/python",
+            "env": {
+                "PYTHONPATH": "${env:PYTHONPATH}:/mine-segmentation"
+            },
+            "args": ["fit", "--config", "configs/cnn/cnn_segment_config_cpu.yaml"]
         },
         {
             "name": "Python:Streamlit",

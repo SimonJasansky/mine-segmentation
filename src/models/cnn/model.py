@@ -72,33 +72,32 @@ class MineSegmentorCNN(L.LightningModule):
             dict: A dictionary containing the optimizer and scheduler
             configuration.
         """
-        # optimizer = optim.AdamW(
-        #     [
-        #         param
-        #         for name, param in self.model.named_parameters()
-        #         if param.requires_grad
-        #     ],
-        #     lr=self.hparams.lr,
-        #     weight_decay=self.hparams.wd,
-        #     betas=(self.hparams.b1, self.hparams.b2),
-        # )
-        # scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
-        #     optimizer,
-        #     T_0=1000,
-        #     T_mult=1,
-        #     eta_min=self.hparams.lr * 100,
-        #     last_epoch=-1,
-        # )
-        # return {
-        #     "optimizer": optimizer,
-        #     "lr_scheduler": {
-        #         "scheduler": scheduler,
-        #         "interval": "step",
-        #     },
-        # }
-        return torch.optim.Adam(self.parameters(), lr=0.0001)
+        optimizer = optim.AdamW(
+            [
+                param
+                for name, param in self.model.named_parameters()
+                if param.requires_grad
+            ],
+            lr=self.hparams.lr,
+            weight_decay=self.hparams.wd,
+            betas=(self.hparams.b1, self.hparams.b2),
+        )
+        scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer,
+            T_0=1000,
+            T_mult=1,
+            eta_min=self.hparams.lr * 100,
+            last_epoch=-1,
+        )
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",
+            },
+        }
 
-    def shared_step(self, batch, phase):
+    def shared_step(self, batch, batch_idx, phase):
         """
         Shared step for training and validation.
 
@@ -109,37 +108,19 @@ class MineSegmentorCNN(L.LightningModule):
         Returns:
             torch.Tensor: The loss value.
         """
-        labels = batch["label"]
+
         image = batch["pixels"]
-
-        # change image range from [-1, 1] to [0, 1]
-        # image = (image + 1) / 2
-
-        # switch the first and second dimensions
-        # image = image.permute(1, 0, 2, 3)
+        labels = batch["label"]
 
         logits_mask = self.forward(image)
 
         # expand the first dimension of the labels
         labels = labels.unsqueeze(1)
 
-        print(image.shape, logits_mask.shape, labels.shape)
-        print("Image")
-        print(image)
-        # check max and min values
-        print(image.max(), image.min())
-        # check if there is any nan in the image
-        print(torch.isnan(image).any())
-
-        print("Logits")
-        print(logits_mask)
-
-        # print(labels)
-
         loss = self.loss_fn(logits_mask, labels)
 
         # Lets compute metrics for some threshold
-        # first convert mask values to probabilities, then 
+        # first convert mask values to probabilities, then
         # apply thresholding
         prob_mask = logits_mask.sigmoid()
         pred_mask = (prob_mask > 0.5).float()
@@ -177,7 +158,7 @@ class MineSegmentorCNN(L.LightningModule):
         )
         return loss
 
-    def training_step(self, batch):
+    def training_step(self, batch, batch_idx):
         """
         Training step for the model.
 
@@ -188,9 +169,9 @@ class MineSegmentorCNN(L.LightningModule):
         Returns:
             torch.Tensor: The loss value.
         """
-        return self.shared_step(batch, "train")
+        return self.shared_step(batch, batch_idx, "train")
 
-    def validation_step(self, batch):
+    def validation_step(self, batch, batch_idx):
         """
         Validation step for the model.
 
@@ -201,4 +182,4 @@ class MineSegmentorCNN(L.LightningModule):
         Returns:
             torch.Tensor: The loss value.
         """
-        return self.shared_step(batch, "val")
+        return self.shared_step(batch, batch_idx, "val")
