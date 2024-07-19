@@ -6,15 +6,15 @@ data:
   val_chip_dir: data/processed/npy/chips/val/chips/
   val_label_dir: data/processed/npy/chips/val/labels/
   metadata_path: configs/cnn/cnn_segment_metadata.yaml
-  batch_size: 2
-  num_workers: 4 # Set to number of CPU cores
+  batch_size: 8
+  num_workers: 8 # Set to number of CPU cores
   platform: sentinel-2-l2a
 model:
   arch: unet
   encoder_name: resnet34
   encoder_weights: imagenet
-  num_classes: 1
   in_channels: 3
+  num_classes: 1
   lr: 1e-5
   wd: 0.05
   b1: 0.9
@@ -24,7 +24,7 @@ trainer:
   strategy: ddp
   devices: auto
   num_nodes: 1
-  precision: 16-mixed
+  precision: 32
   log_every_n_steps: 1
   max_epochs: 10
   accumulate_grad_batches: 1
