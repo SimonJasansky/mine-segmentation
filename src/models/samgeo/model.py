@@ -15,7 +15,7 @@ from samgeo import split_raster, array_to_image
 from samgeo.text_sam import LangSAM
 
 from src.data.get_satellite_images import ReadSTAC
-from src.visualization.visualize import plot_multiple_masks_on_images, plot_mask_on_image, plot_S2_geotiff_rgb
+from src.visualization.visualization_funcs import plot_multiple_masks_on_images, plot_mask_on_image, plot_S2_geotiff_rgb
 from src.utils import geotiff_to_PIL, normalize_geotiff, merge_geotiffs
 
 
@@ -516,6 +516,8 @@ class MineSamGeo:
         # load mask with rasterio
         with rasterio.open(mask_path) as src:
             mask = src.read(1)
+
+        # From here, use combined function 
 
         # Custom single-color colormap
         blue_cmap = ListedColormap(['#FF000000', 'blue'])

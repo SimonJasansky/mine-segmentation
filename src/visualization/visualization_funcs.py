@@ -2,15 +2,17 @@ import os
 import rasterio
 import numpy as np
 import scipy.ndimage
-import matplotlib.pyplot as plt
 import geopandas as gpd
 from skimage.transform import resize
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.colors import ListedColormap
 
 
 #############################
 ### Historic Mining Area ####
 #############################
-
 
 def plot_multiple_masks_on_images(image_files, mask_files):
     """Plot multiple images and their corresponding masks side by side.
@@ -85,7 +87,6 @@ def plot_mask_on_image(image_path, mask_path, ax):
     ax.set_title(f'Year: {year}')
 
 
-
 def plot_area_per_year(gpkg_files):
     """Plot the total mining area per year.
 
@@ -120,9 +121,9 @@ def plot_area_per_year(gpkg_files):
     plt.show()
 
 
-#############################
-### Chips and Masks #########
-#############################
+##############################
+### Plot Chips and Masks #####
+##############################
 
 def plot_chips_and_masks(root, seed=0):
     """
@@ -193,4 +194,89 @@ def plot_S2_geotiff_rgb(file_path):
     plt.imshow(rgb)
     plt.show()
 
+##############################
+### Plotting the Prediction ##
+##############################
+def plot_pred_vs_true_mask(
+    image, 
+    true_mask, 
+    pred_mask,
+    ax=None,
+    alpha=0.4,
+    blend=True,
+    add_legend=True,
+    **kwargs
+):
+    """Show the predicted mask and the true mask on the input image.
+    
+    Args:
+        image (numpy.ndarray): The input image.
+        true_mask (numpy.ndarray): The true mask.
+        pred_mask (numpy.ndarray): The predicted mask.
+        ax (matplotlib.axes.Axes, optional): The matplotlib axis to plot on. If None, a new figure will be created. Defaults to None.
+        alpha (float, optional): The alpha value for the mask. Defaults to 0.4.
+        blend (bool, optional): Whether to blend the mask with the input image. Defaults to True.
+        add_legend (bool, optional): Whether to add a legend to the plot. Defaults to True.
+        kwargs (dict, optional): Additional arguments for matplotlib.pyplot.savefig().
 
+    Returns:
+        None
+    """
+
+    # Custom single-color colormap
+    blue_cmap = ListedColormap(['#FF000000', 'blue'])
+    yellow_cmap = ListedColormap(['#FF000000', 'yellow'])
+    green_cmap = ListedColormap(['#FF000000', 'green'])
+    red_cmap = ListedColormap(['#FF000000', 'red'])
+
+    # Calculate different areas
+    true_positive = np.logical_and(true_mask == 1, pred_mask == 1)
+    true_negative = np.logical_and(true_mask == 0, pred_mask == 0)
+    false_positive = np.logical_and(true_mask == 0, pred_mask == 1)
+    false_negative = np.logical_and(true_mask == 1, pred_mask == 0)
+
+    # Calculate metrics
+    intersection = np.logical_and(true_mask, pred_mask)
+    union = np.logical_or(true_mask, pred_mask)
+    iou = np.sum(intersection) / np.sum(union)
+    precision = np.sum(true_positive) / (np.sum(true_positive) + np.sum(false_positive))
+    recall = np.sum(true_positive) / (np.sum(true_positive) + np.sum(false_negative))
+    f1_score = 2 * precision * recall / (precision + recall)
+
+    # Create a new figure if ax is None
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    # Plot mask
+    if blend:
+        ax.imshow(image, cmap='gray')
+        ax.imshow(true_positive, cmap=yellow_cmap, alpha=alpha)
+        ax.imshow(true_negative, cmap=blue_cmap, alpha=alpha)
+        ax.imshow(false_positive, cmap=red_cmap, alpha=alpha)
+        ax.imshow(false_negative, cmap=green_cmap, alpha=alpha)
+    else:
+        ax.imshow(true_positive, cmap=yellow_cmap, alpha=alpha)
+        ax.imshow(true_negative, cmap=blue_cmap, alpha=alpha)
+        ax.imshow(false_positive, cmap=red_cmap, alpha=alpha)
+        ax.imshow(false_negative, cmap=green_cmap, alpha=alpha)
+    ax.axis('off')
+
+    # Add legend
+    legend_elements = [
+        patches.Patch(facecolor='yellow', alpha=alpha, label='True Positive'),
+        patches.Patch(facecolor='blue', alpha=alpha, label='True Negative'),
+        patches.Patch(facecolor='red', alpha=alpha, label='False Positive'),
+        patches.Patch(facecolor='green', alpha=alpha, label='False Negative')
+    ]
+    if add_legend:
+        ax.legend(handles=legend_elements)
+
+    # Add metrics to title
+    title = f"IoU: {iou:.2f}, F1 Score: {f1_score:.2f}"
+    ax.set_title(title)
+
+    # Save the figure if kwargs are provided
+    if kwargs:
+        plt.savefig(**kwargs)
+    else:
+        plt.show()
