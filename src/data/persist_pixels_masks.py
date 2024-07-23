@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
     if only_valid_surface_mines:
         len_before = len(tiles)
-        tiles = tiles[(tiles["source_dataset"] != "rejected") & (tiles["minetype1"] == "Surface")]
+        tiles = tiles[(tiles["source_dataset"] != "rejected") & (tiles["minetype1"] in ["Surface", "Placer"])]
         len_after = len(tiles)
         print(f"Filtered out {len_before - len_after} rejected tiles and non-surface mines")
         

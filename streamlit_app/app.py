@@ -421,7 +421,7 @@ def main():
                 index=None, key="preferred_dataset")
 
         # Add horizontal radio button for mine type 1
-        st.radio("Mine Type 1", ["Surface", "Brine & Evaporation Pond", "Underground"], index=0, key="minetype1")
+        st.radio("Mine Type 1", ["Surface", "Placer", "Brine & Evaporation Pond", "Underground"], index=0, key="minetype1")
 
         # Add horizontal radio button for mine type 2
         st.radio("Mine Type 2", ["Industrial", "Artisanal"], index=None, key="minetype2")
@@ -475,23 +475,34 @@ def main():
     tiles_copy = gpd.read_file(DATASET, layer="tiles")
     maus_copy = gpd.read_file(DATASET, layer="maus_polygons")
     tang_copy = gpd.read_file(DATASET, layer="tang_polygons")
+    erroneous_tiles = gpd.read_file(ERRONEOUS_TILES)
 
     # Convert the geometry to WKT
     tiles_copy['geometry_wkt'] = tiles_copy['geometry'].apply(lambda x: shapely.wkt.dumps(x)).astype(str)
     maus_copy['geometry_wkt'] = maus_copy['geometry'].apply(lambda x: shapely.wkt.dumps(x)).astype(str)
     tang_copy['geometry_wkt'] = tang_copy['geometry'].apply(lambda x: shapely.wkt.dumps(x)).astype(str)
+    erroneous_tiles['geometry_wkt'] = erroneous_tiles['geometry'].apply(lambda x: shapely.wkt.dumps(x)).astype(str)
 
     # Drop the geometry column
     tiles_copy = tiles_copy.drop(columns="geometry")
     maus_copy = maus_copy.drop(columns="geometry")
     tang_copy = tang_copy.drop(columns="geometry")
+    erroneous_tiles = erroneous_tiles.drop(columns="geometry")
 
     # Add progress bar for the dataset
     n_tiles_reviewed = len(tang_copy)
+    n_erroneous_tiles = len(erroneous_tiles)
     n_tiles_to_review = len(mining_area_tiles)
+
+    # Progress without erroneous tiles
     st.write(f"Progress: {n_tiles_reviewed}/{n_tiles_to_review} tiles reviewed.",
             f"{n_tiles_reviewed / n_tiles_to_review:.2%} completed.")
     st.progress(n_tiles_reviewed / n_tiles_to_review)
+
+    # Progress with erroneous tiles
+    st.write(f"Progress (including erroneous tiles): {n_tiles_reviewed + n_erroneous_tiles}/{n_tiles_to_review} tiles reviewed.",
+            f"{(n_tiles_reviewed + n_erroneous_tiles) / n_tiles_to_review:.2%} reviewed.")
+    st.progress((n_tiles_reviewed + n_erroneous_tiles) / n_tiles_to_review)
 
     # Display the dataset
     st.dataframe(tiles_copy)
