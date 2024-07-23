@@ -40,22 +40,18 @@ def add_bounding_boxes(row):
 def remove_duplicates(tiles, maus, tang):
 
     len_before = len(tiles)
-    duplicates_tile_id = tiles[tiles.tile_id.duplicated(keep=False)]
-    duplicates_geom = tiles[tiles.geometry.duplicated(keep=False)]
+    duplicates_tile_id = tiles[tiles.tile_id.duplicated(keep="first")]
+    duplicates_geom = tiles[tiles.geometry.duplicated(keep="first")]
 
-    if not duplicates_tile_id == duplicates_geom:
-        raise ValueError("Duplicates based on tile_id and geometry do not match")
-    else:
-        duplicates = duplicates_tile_id
+    indices_to_remove = list(set((*duplicates_tile_id.index, *duplicates_geom.index)))
+    tile_ids_to_remove = tiles.iloc[indices_to_remove].tile_id.unique().tolist()
+    print(f"Found {len(indices_to_remove)} duplicates at indices {indices_to_remove}, having tile_ids {tile_ids_to_remove}. ")
 
-    print(f"Found {len(duplicates)} duplicates:")
-    print(duplicates)
-    
-    tiles = tiles.drop_duplicates(subset="tile_id")
-    maus = maus.drop_duplicates(subset="tile_id")
-    tang = tang.drop_duplicates(subset="tile_id")
+    tiles = tiles.drop(indices_to_remove)
+    maus = maus.drop(indices_to_remove)
+    tang = tang.drop(indices_to_remove)
+
     len_after = len(tiles)
-    
     print(f"Removed {len_before - len_after} duplicates")
     return tiles, maus, tang
 
@@ -74,7 +70,7 @@ if __name__ == '__main__':
 
     # Checks
     assert len(tiles) == len(maus) == len(tang), "Number of tiles, maus and tang datasets must be equal"
-    assert len(tiles) == len(tiles.tile_id.unique()), "tile_id must be unique"
+    assert len(tiles) == len(tiles.tile_id.unique()), f"tile_id must be unique, with {len(tiles)} tiles, and {len(tiles.tile_id.unique())} unique tile_ids"
     assert tiles["tile_id"].equals(maus["tile_id"]), "tile_id must be the same in tiles and maus"
     assert tiles["tile_id"].equals(tang["tile_id"]), "tile_id must be the same in tiles and tang"
 
