@@ -36,6 +36,28 @@ def add_bounding_boxes(row):
         bounding_boxes = shapely.geometry.Polygon(bounding_boxes)
 
         return bounding_boxes
+    
+def remove_duplicates(tiles, maus, tang):
+
+    len_before = len(tiles)
+    duplicates_tile_id = tiles[tiles.tile_id.duplicated(keep=False)]
+    duplicates_geom = tiles[tiles.geometry.duplicated(keep=False)]
+
+    if not duplicates_tile_id == duplicates_geom:
+        raise ValueError("Duplicates based on tile_id and geometry do not match")
+    else:
+        duplicates = duplicates_tile_id
+
+    print(f"Found {len(duplicates)} duplicates:")
+    print(duplicates)
+    
+    tiles = tiles.drop_duplicates(subset="tile_id")
+    maus = maus.drop_duplicates(subset="tile_id")
+    tang = tang.drop_duplicates(subset="tile_id")
+    len_after = len(tiles)
+    
+    print(f"Removed {len_before - len_after} duplicates")
+    return tiles, maus, tang
 
 if __name__ == '__main__':
 
@@ -46,6 +68,15 @@ if __name__ == '__main__':
     tiles = gpd.read_file(DATASET_RAW, layer="tiles")
     maus = gpd.read_file(DATASET_RAW, layer="maus_polygons")
     tang = gpd.read_file(DATASET_RAW, layer="tang_polygons")
+
+    # Remove duplicates
+    tiles, maus, tang = remove_duplicates(tiles, maus, tang)
+
+    # Checks
+    assert len(tiles) == len(maus) == len(tang), "Number of tiles, maus and tang datasets must be equal"
+    assert len(tiles) == len(tiles.tile_id.unique()), "tile_id must be unique"
+    assert tiles["tile_id"].equals(maus["tile_id"]), "tile_id must be the same in tiles and maus"
+    assert tiles["tile_id"].equals(tang["tile_id"]), "tile_id must be the same in tiles and tang"
 
     # Add bounding boxes to the dataset
     maus_bboxes = maus.apply(add_bounding_boxes, axis=1)
