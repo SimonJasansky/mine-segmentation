@@ -15,6 +15,7 @@ TILES = "data/interim/tiles.gpkg"
 MAUS_POLYGONS = "data/external/maus_mining_polygons.gpkg"
 TANG_POLYGONS = "data/external/tang_mining_polygons/74548_mine_polygons/74548_projected.shp"
 DATASET = "data/raw/mining_tiles_with_masks.gpkg"
+ERRONEOUS_TILES = "data/interim/erroneous_tiles.gpkg"
 
 # Load data
 @st.cache_data
@@ -39,13 +40,7 @@ def load_data():
     tang_gdf.geometry = shapely.wkb.loads(shapely.wkb.dumps(tang_gdf.geometry, output_dimension=2))
 
     # Check if the dataset exists, and if not, create it
-    if os.path.exists(DATASET):
-        pass
-        # Load the dataset
-        # tiles = gpd.read_file(DATASET, layer="tiles")
-        # maus = gpd.read_file(DATASET, layer="maus_polygons")
-        # tang = gpd.read_file(DATASET, layer="tang_polygons")
-    else:
+    if not os.path.exists(DATASET):
         # Create the dataset
         columns_tiles = ["tile_id", "s2_tile_id", "source_dataset", "preferred_dataset", "minetype1", "minetype2", "comment", "timestamp", "geometry"]
         columns_maus = ["tile_id", "geometry"]
@@ -58,6 +53,13 @@ def load_data():
         tiles.to_file(DATASET, driver="GPKG", layer="tiles")
         maus.to_file(DATASET, driver="GPKG", layer="maus_polygons")
         tang.to_file(DATASET, driver="GPKG", layer="tang_polygons")
+
+    # Check if the erroneous tiles file exists, and if not, create it
+    if not os.path.exists(ERRONEOUS_TILES):
+        # Create the dataset
+        columns_tiles = ["tile_id", "timestamp", "geometry"]
+        tiles = gpd.GeoDataFrame(columns=columns_tiles, crs="EPSG:4326", geometry="geometry")
+        tiles.to_file(ERRONEOUS_TILES, driver="GPKG", layer="tiles")
 
     # Initialize the STAC reader
     api_url="https://planetarycomputer.microsoft.com/api/stac/v1"
@@ -83,9 +85,11 @@ def set_random_tile():
     # Refresh the tile
     mining_area_tiles = gpd.read_file(TILES)
     dataset = gpd.read_file(DATASET)
+    erroneous_tiles = gpd.read_file(ERRONEOUS_TILES)
 
-    # take only tiles that are not yet in the dataset
-    mining_area_tiles = mining_area_tiles[~mining_area_tiles.index.isin(dataset["tile_id"].astype(int).values)]    
+    # take only tiles that are not yet in the dataset or in the erroneous tiles
+    forbidden_indices = dataset["tile_id"].astype(int).values.tolist() + erroneous_tiles["tile_id"].astype(int).values.tolist()
+    mining_area_tiles = mining_area_tiles[~mining_area_tiles.index.isin(forbidden_indices)]
     random_tile = mining_area_tiles.sample(n=1)
 
     st.session_state.tile = random_tile
@@ -109,13 +113,16 @@ def load_least_cloudy_item(_stac_reader, bbox, year):
     )
 
     if len(items) < 1: 
-        st.error("No S2 images found for this tile. Please refresh the tile or change to another year.")
+        st.error("No S2 images found for this tile. ")
 
     try:
         # Get the least cloudy images
         least_cloudy_item = _stac_reader.filter_item(items, "least_cloudy", full_overlap=True)
     except ValueError:
-        st.error("A ValueError occurred. No S2 images that fully overlap with this tile are found. Please refresh the tile.")
+        st.warning("A ValueError occurred. No S2 images that fully overlap with this tile are found. Rejected tile. Please refresh.")
+
+        # add to erroneous tiles
+        add_erroneous_tile(st.session_state.tile.index[0])
 
     return least_cloudy_item
 
@@ -138,8 +145,14 @@ def visualize_tile(tile, maus_gdf, tang_gdf, least_cloudy_item):
     tile_geometry = tile['geometry'].values[0]
 
     bbox = tile_geometry.bounds
+    try:
+        url = least_cloudy_item.assets["visual"].href
+    except Exception as e:
+        st.warning("An error occurred. Error message: {}".format(str(e)))
 
-    url = least_cloudy_item.assets["visual"].href
+        # Add to erroneous tiles
+        add_erroneous_tile(tile.index[0])
+
     s2_tile_id = least_cloudy_item.id
     
     # Create a Map
@@ -172,9 +185,14 @@ def visualize_tile(tile, maus_gdf, tang_gdf, least_cloudy_item):
     maus_gdf_filtered = maus_gdf.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
     tang_gdf_filtered = tang_gdf.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
 
-    # Crop the multipolygon to the tile bbox
-    maus_gdf_filtered["geometry"] = maus_gdf_filtered["geometry"].apply(lambda x: x.intersection(tile_geometry))
-    tang_gdf_filtered["geometry"] = tang_gdf_filtered["geometry"].apply(lambda x: x.intersection(tile_geometry))
+    # Crop the multipolygon to the tile bbox    
+    try:     
+        maus_gdf_filtered["geometry"] = maus_gdf_filtered["geometry"].apply(lambda x: x.intersection(tile_geometry))
+        tang_gdf_filtered["geometry"] = tang_gdf_filtered["geometry"].apply(lambda x: x.intersection(tile_geometry))
+    except Exception as e:
+        st.warning("An error occurred. Error message: {}".format(str(e)))
+        # add to erroneous tiles
+        add_erroneous_tile(tile.index[0])
 
     # Check that all are of type polygon and not multipolygon
     maus_gdf_filtered = maus_gdf_filtered[maus_gdf_filtered["geometry"].apply(lambda x: x.geom_type == "Polygon")]
@@ -328,6 +346,34 @@ def accept_polygons(
     tang.to_file(DATASET, driver="GPKG", layer="tang_polygons")
 
     
+def add_erroneous_tile(tile_id):
+    """
+    Add an erroneous tile to the dataset.
+
+    Args:
+        tile_id (int): Tile ID to add.
+    """
+    # Load the erroneous tiles
+    erroneous_tiles = gpd.read_file(ERRONEOUS_TILES)
+
+    # Add the tile to the erroneous tiles
+    error_tile_dict = {
+        "tile_id": tile_id,
+        "timestamp": pd.Timestamp.now(),
+        "geometry": st.session_state.tile["geometry"].values[0]
+    }
+
+    # Create a GeoDataFrame from the dictionary
+    error_tile_gdf = gpd.GeoDataFrame([error_tile_dict], crs="EPSG:4326")
+
+    # Concatenate the dataset with the new row
+    erroneous_tiles = pd.concat([erroneous_tiles, error_tile_gdf], ignore_index=True)
+
+    # Write the dataset to the file
+    erroneous_tiles.to_file(ERRONEOUS_TILES, driver="GPKG", layer="tiles")
+
+    st.warning("Tile added to the erroneous tiles")
+
 ##################
 # Main interface #
 ##################

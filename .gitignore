@@ -79,8 +79,11 @@ target/
 # Ignore everything under data
 data/*
 !data/raw/
+!data/interim/
 data/raw/*
+data/interim/*
 !data/raw/mining_tiles_with_masks.gpkg
+!data/interim/erroneous_tiles.gpkg
 
 # Mac OS-specific storage files
 .DS_Store
