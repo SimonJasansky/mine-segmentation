@@ -227,7 +227,7 @@ def visualize_tile(tile, maus_gdf, tang_gdf, least_cloudy_item):
     if edit_mode:
         st_data = m.to_streamlit(width=1000, height=800, bidirectional=True)
     else:
-        m.to_streamlit(width=1000, height=800, bidirectional=False)
+        m.to_streamlit(width=900, height=900, bidirectional=False)
         st_data = None
 
     # create three columns
