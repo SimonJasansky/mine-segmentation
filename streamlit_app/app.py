@@ -185,8 +185,12 @@ def visualize_tile(tile, maus_gdf, tang_gdf, least_cloudy_item):
     maus_gdf_filtered = maus_gdf.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
     tang_gdf_filtered = tang_gdf.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
 
-    # Crop the multipolygon to the tile bbox    
-    try:     
+    # make the tang polygons valid (Currently this causes some problems as for some it does simply remove the polygon. )
+    # tang_geoseries = gpd.GeoSeries(tang_gdf_filtered["geometry"])
+    # tang_gdf_filtered["geometry"] = tang_geoseries.make_valid()
+
+    # Crop the multipolygon to the tile bbox
+    try:
         maus_gdf_filtered["geometry"] = maus_gdf_filtered["geometry"].apply(lambda x: x.intersection(tile_geometry))
         tang_gdf_filtered["geometry"] = tang_gdf_filtered["geometry"].apply(lambda x: x.intersection(tile_geometry))
     except Exception as e:
@@ -225,9 +229,12 @@ def visualize_tile(tile, maus_gdf, tang_gdf, least_cloudy_item):
         m.add_gdf(tang_gdf_filtered, layer_name="tang_gdf", style=style_tang)
 
     if edit_mode:
-        st_data = m.to_streamlit(width=1000, height=800, bidirectional=True)
+        st_data = m.to_streamlit(width=100, height=800, bidirectional=True)
     else:
-        m.to_streamlit(width=900, height=900, bidirectional=False)
+        # with Screen
+        m.to_streamlit(width=1200, height=900, bidirectional=False)
+        # on Laptop
+        # m.to_streamlit(width=970, height=900, bidirectional=False)
         st_data = None
 
     # create three columns
