@@ -185,22 +185,20 @@ def visualize_tile(tile, maus_gdf, tang_gdf, least_cloudy_item):
     maus_gdf_filtered = maus_gdf.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
     tang_gdf_filtered = tang_gdf.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
 
-    # make the tang polygons valid (Currently this causes some problems as for some it does simply remove the polygon. )
-    # tang_geoseries = gpd.GeoSeries(tang_gdf_filtered["geometry"])
-    # tang_gdf_filtered["geometry"] = tang_geoseries.make_valid()
+    # make them valid
+    tang_gdf_filtered["geometry"] = tang_gdf_filtered["geometry"].apply(lambda x: shapely.make_valid(x))
+    maus_gdf_filtered["geometry"] = maus_gdf_filtered["geometry"].apply(lambda x: shapely.make_valid(x))
 
-    # Crop the multipolygon to the tile bbox
-    try:
-        maus_gdf_filtered["geometry"] = maus_gdf_filtered["geometry"].apply(lambda x: x.intersection(tile_geometry))
-        tang_gdf_filtered["geometry"] = tang_gdf_filtered["geometry"].apply(lambda x: x.intersection(tile_geometry))
-    except Exception as e:
-        st.warning("An error occurred. Error message: {}".format(str(e)))
-        # add to erroneous tiles
-        add_erroneous_tile(tile.index[0])
+    # create new gdf with only one row that holds the combined multipolygon
+    maus_multipolygon = maus_gdf_filtered["geometry"].unary_union
+    tang_multipolygon = tang_gdf_filtered["geometry"].unary_union
 
-    # Check that all are of type polygon and not multipolygon
-    maus_gdf_filtered = maus_gdf_filtered[maus_gdf_filtered["geometry"].apply(lambda x: x.geom_type == "Polygon")]
-    tang_gdf_filtered = tang_gdf_filtered[tang_gdf_filtered["geometry"].apply(lambda x: x.geom_type == "Polygon")]
+    maus_gdf_filtered = gpd.GeoDataFrame(geometry=[maus_multipolygon], crs="EPSG:4326")
+    tang_gdf_filtered = gpd.GeoDataFrame(geometry=[tang_multipolygon], crs="EPSG:4326")
+
+    # get intersection of multipolygon with tile bbox
+    maus_gdf_filtered["geometry"] = maus_gdf_filtered["geometry"].apply(lambda x: x.intersection(tile_geometry))
+    tang_gdf_filtered["geometry"] = tang_gdf_filtered["geometry"].apply(lambda x: x.intersection(tile_geometry))
 
     style_maus = {
         "stroke": True,
@@ -319,15 +317,22 @@ def accept_polygons(
         "tile_id": tile.index[0],
         "geometry": None
     }
+    
+    # assert that the gdf_filtered have only one row containing the multipolygon
+    if len(maus_gdf_filtered) > 1:
+        raise ValueError("Maus gdf_filtered contains more than one row")
+    if len(tang_gdf_filtered) > 1:
+        raise ValueError("Tang gdf_filtered contains more than one row")
+    
 
     if accepted_source_dataset == "maus":
         # Create a Multipolygon from the polygons with unary_union
-        maus_dict["geometry"] = maus_gdf_filtered["geometry"].unary_union
+        maus_dict["geometry"] = maus_gdf_filtered["geometry"][0]
     elif accepted_source_dataset == "tang":
-        tang_dict["geometry"] = tang_gdf_filtered["geometry"].unary_union
+        tang_dict["geometry"] = tang_gdf_filtered["geometry"][0]
     elif accepted_source_dataset == "both":
-        maus_dict["geometry"] = maus_gdf_filtered["geometry"].unary_union
-        tang_dict["geometry"] = tang_gdf_filtered["geometry"].unary_union
+        maus_dict["geometry"] = maus_gdf_filtered["geometry"][0]
+        tang_dict["geometry"] = tang_gdf_filtered["geometry"][0]
     elif accepted_source_dataset == "rejected":
         pass
     else:
