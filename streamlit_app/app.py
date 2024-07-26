@@ -185,6 +185,10 @@ def visualize_tile(tile, maus_gdf, tang_gdf, least_cloudy_item):
     maus_gdf_filtered = maus_gdf.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
     tang_gdf_filtered = tang_gdf.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
 
+    # extract country name
+    if not maus_gdf_filtered.empty:
+        country = maus_gdf_filtered["COUNTRY_NAME"].values[0]
+
     # make them valid
     tang_gdf_filtered["geometry"] = tang_gdf_filtered["geometry"].apply(lambda x: shapely.make_valid(x))
     maus_gdf_filtered["geometry"] = maus_gdf_filtered["geometry"].apply(lambda x: shapely.make_valid(x))
@@ -236,7 +240,7 @@ def visualize_tile(tile, maus_gdf, tang_gdf, least_cloudy_item):
         st_data = None
 
     # create three columns
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         # Display the tile dataframe
@@ -250,6 +254,11 @@ def visualize_tile(tile, maus_gdf, tang_gdf, least_cloudy_item):
     with col3:
         # Display the cloud coverage
         st.write(f"Cloud coverage: {least_cloudy_item.properties['eo:cloud_cover']}%")
+
+    with col4:
+        # Display the country
+        if country:
+            st.write(f"Country: {country}")
 
     st.write(f"Sentinel-2 Tile ID: {s2_tile_id}")
 
