@@ -75,7 +75,7 @@ def load_data():
     return maus_gdf, tang_gdf, stac_reader, mining_area_tiles
 
 
-def set_random_tile():
+def set_random_tile(refresh_counter=0):
     """
     Get a random mining tile.
 
@@ -91,6 +91,14 @@ def set_random_tile():
     forbidden_indices = dataset["tile_id"].astype(int).values.tolist() + erroneous_tiles["tile_id"].astype(int).values.tolist()
     mining_area_tiles = mining_area_tiles[~mining_area_tiles.index.isin(forbidden_indices)]
     random_tile = mining_area_tiles.sample(n=1)
+
+    # check if the tile overlaps with an already annotated tile 
+    tiles_multipolygon = dataset["geometry"].unary_union
+    if random_tile["geometry"].values[0].intersects(tiles_multipolygon):
+        refresh_counter +=1
+        if refresh_counter > 10:
+            st.warning("More than 10 refreshes needed to find a non-overlapping tile. Please check the dataset soon. ")
+        set_random_tile(refresh_counter=refresh_counter)
 
     st.session_state.tile = random_tile
 
