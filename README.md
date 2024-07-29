@@ -38,19 +38,6 @@ sudo apt-get install unrar
 
 TODO
 
-### Initializing Submodules
-
-Currently, the project includes the [Clay model repository](https://github.com/Clay-foundation/model) as a submodule. As the mine-segmentation project relies on the Clay foundation model as one of the models used, having access to the original source code is beneficial during development.
-
-After cloning the repository, the `clay` folder will be empty, and if you want to have access to the submodule code, you need to initialize and update the submodule. To do this, run the following commands in the root directory of the project:
-
-```bash
-git submodule init
-git submodule update
-```
-
-These commands will fetch and update the contents of the `clay` submodule directory based on the commit specified in the main project.
-
 ### Lightning Studios
 
 To set up the repo in a Lightning Studio, do this before proceeding with the installation as detailed above:
