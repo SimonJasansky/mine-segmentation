@@ -92,7 +92,8 @@ def set_random_tile(refresh_counter=0):
     mining_area_tiles = mining_area_tiles[~mining_area_tiles.index.isin(forbidden_indices)]
     random_tile = mining_area_tiles.sample(n=1)
 
-    # check if the tile overlaps with an already annotated tile 
+    # check if the tile overlaps with an already annotated & accepted tile 
+    # dataset = dataset[dataset["preferred_dataset"].isin(["maus", "tang"])]
     tiles_multipolygon = dataset["geometry"].unary_union
     if random_tile["geometry"].values[0].intersects(tiles_multipolygon):
         refresh_counter +=1
@@ -242,9 +243,9 @@ def visualize_tile(tile, maus_gdf, tang_gdf, least_cloudy_item):
         st_data = m.to_streamlit(width=100, height=800, bidirectional=True)
     else:
         # with Screen
-        m.to_streamlit(width=1200, height=900, bidirectional=False)
+        # m.to_streamlit(width=1200, height=900, bidirectional=False)
         # on Laptop
-        # m.to_streamlit(width=970, height=900, bidirectional=False)
+        m.to_streamlit(width=970, height=900, bidirectional=False, add_layer_control=True)
         st_data = None
 
     # create three columns
