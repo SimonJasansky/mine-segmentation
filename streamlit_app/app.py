@@ -100,16 +100,16 @@ def set_random_tile(refresh_counter=0):
         if refresh_counter > 10:
             st.warning("More than 10 refreshes needed to find a non-overlapping tile. Please check the dataset soon. ")
         set_random_tile(refresh_counter=refresh_counter)
+    else:
+        st.session_state.tile = random_tile
 
-    st.session_state.tile = random_tile
-
-    # Reset the year to 2019
-    st.session_state.year = 2019
-    st.session_state.comment = ""
-    st.session_state.minetype1 = "Surface"
-    st.session_state.minetype2 = None
-    st.session_state.preferred_dataset = None
-    st.session_state.satellite = False
+        # Reset the year to 2019
+        st.session_state.year = 2019
+        st.session_state.comment = ""
+        st.session_state.minetype1 = "Surface"
+        st.session_state.minetype2 = None
+        st.session_state.preferred_dataset = None
+        st.session_state.satellite = False
 
 @st.cache_data
 def load_least_cloudy_item(_stac_reader, bbox, year):
