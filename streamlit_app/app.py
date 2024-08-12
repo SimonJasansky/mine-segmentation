@@ -99,6 +99,7 @@ def set_random_tile(refresh_counter=0):
         refresh_counter +=1
         if refresh_counter > 10:
             st.warning("More than 10 refreshes needed to find a non-overlapping tile. Please check the dataset soon. ")
+            refresh_counter = 0
         set_random_tile(refresh_counter=refresh_counter)
     else:
         st.session_state.tile = random_tile
