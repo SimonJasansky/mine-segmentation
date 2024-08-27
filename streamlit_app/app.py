@@ -93,7 +93,7 @@ def set_random_tile(refresh_counter=0):
     random_tile = mining_area_tiles.sample(n=1)
 
     # check if the tile overlaps with an already annotated & accepted tile 
-    # dataset = dataset[dataset["preferred_dataset"].isin(["maus", "tang"])]
+    dataset = dataset[dataset["preferred_dataset"].isin(["maus", "tang"])]
     tiles_multipolygon = dataset["geometry"].unary_union
     if random_tile["geometry"].values[0].intersects(tiles_multipolygon):
         refresh_counter +=1
