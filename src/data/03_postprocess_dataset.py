@@ -52,6 +52,11 @@ def remove_duplicates(tiles, maus, tang):
     maus = maus.drop(indices_to_remove)
     tang = tang.drop(indices_to_remove)
 
+    # reset index
+    tiles = tiles.reset_index(drop=True)
+    maus = maus.reset_index(drop=True)
+    tang = tang.reset_index(drop=True)
+
     len_after = len(tiles)
     print(f"Removed {len_before - len_after} duplicates")
     return tiles, maus, tang
@@ -68,8 +73,8 @@ if __name__ == '__main__':
 
     # Remove duplicates
     tiles, maus_polygons, tang_polygons = remove_duplicates(tiles, maus_polygons, tang_polygons)
-
-    # Checks
+    
+    # Sanity checks
     assert len(tiles) == len(maus_polygons) == len(tang_polygons), "Number of tiles, maus and tang datasets must be equal"
     assert len(tiles) == len(tiles.tile_id.unique()), f"tile_id must be unique, with {len(tiles)} tiles, and {len(tiles.tile_id.unique())} unique tile_ids"
     assert tiles["tile_id"].equals(maus_polygons["tile_id"]), "tile_id must be the same in tiles and maus"
@@ -86,9 +91,6 @@ if __name__ == '__main__':
     # add the tile id as a column in front of the geometry column
     maus_bboxes_gdf.insert(0, 'tile_id', maus_polygons['tile_id'])
     tang_bboxes_gdf.insert(0, 'tile_id', tang_polygons['tile_id'])
-
-    # # copy Dataset_RAW to location of DATASET_PROCESSED, and rename it
-    # os.system(f"cp {DATASET_RAW} {DATASET_PROCESSED}")
 
     # Create combined dataset based on preferred dataset.
     preferred_poly = []
@@ -107,7 +109,7 @@ if __name__ == '__main__':
         else:
             pref_dataset = tiles.iloc[i,:]['preferred_dataset']
             raise ValueError(f"preferred_dataset must be either 'maus' or 'tang', or 'none', but got {pref_dataset}")
-        
+    
     preferred_polygons = gpd.GeoDataFrame(geometry=preferred_poly, crs=tiles.crs)
     preferred_bboxes = gpd.GeoDataFrame(geometry=preferred_bbox, crs=tiles.crs)
 

@@ -114,16 +114,15 @@ if __name__ == "__main__":
     train_tiles = tiles[tiles.split == "train"]
     val_tiles = tiles[tiles.split == "val"]
     test_tiles = tiles[tiles.split == "test"]
-    train_ratio = len(train_tiles) / (len(train_tiles) + len(val_tiles) + len(test_tiles))
 
-    print(f"Processing {len(train_tiles)} rows for train set")
-    print(f"Processing {len(val_tiles)} rows for val set")
-    print(f"Processing {len(test_tiles)} rows for test set")
-    print(f"Train/Val ratio: {train_ratio}")
+    print(f"Processing {len(train_tiles)} rows for train set ({len(train_tiles)/len(tiles)*100:.2f}%)")
+    print(f"Processing {len(val_tiles)} rows for val set ({len(val_tiles)/len(tiles)*100:.2f}%)")
+    print(f"Processing {len(test_tiles)} rows for test set ({len(test_tiles)/len(tiles)*100:.2f}%)")
 
     # make the directories for train and val
     os.makedirs(output_path + "/train", exist_ok=True)
     os.makedirs(output_path + "/val", exist_ok=True)
+    os.makedirs(output_path + "/test", exist_ok=True)
 
     # Initialize the STAC reader
     api_url="https://planetarycomputer.microsoft.com/api/stac/v1"
@@ -186,27 +185,11 @@ if __name__ == "__main__":
             os.remove(output_path + "/val/" + file)
         print(f"Removed {len(duplicate_files_val)} duplicate files from validation set")
 
-    # # check if there are chips in the validation set that are also in the training set
-    # train_val_set_files = set(train_files).intersection(set(val_files))
-    # if len(train_val_set_files) > 0:
-    #     train_val_ratio = len(train_files) / (len(val_files) + len(train_files))
-
-    #     # if the ratio is less than 0.8, remove the duplicates from the validation set
-    #     if train_val_ratio < train_ratio:
-    #         for file in train_val_set_files:
-    #             os.remove(output_path + "/val/" + file)
-    #         print(f"Removed {len(train_val_set_files)} duplicate files from validation set")
-    #     # if the ratio is greater than or equal to 0.8, remove the duplicates from the training set
-    #     elif train_val_ratio >= train_ratio:
-    #         for file in train_val_set_files:
-    #             os.remove(output_path + "/train/" + file)
-    #         print(f"Removed {len(train_val_set_files)} duplicate files from training set")
-
-    # # recalculate the train/val ratio
-    # train_files = os.listdir(output_path + "/train/")
-    # val_files = os.listdir(output_path + "/val/")
-    # train_val_ratio = len(train_files) / (len(val_files) + len(train_files))
-
+    # check if there are chips in the validation or test set that are also in the training set
+    train_val_test_set_files = set(train_files).intersection(set(val_files)).intersection(set(test_files))
+    if len(train_val_test_set_files) > 0:
+        raise ValueError(f"Found {len(train_val_test_set_files)} files that are in the training, validation, and test sets")
+        
     print("Finished processing images and masks")
     print(f"Train set: {len(train_files)/2} images")
     print(f"Val set: {len(val_files)/2} images")

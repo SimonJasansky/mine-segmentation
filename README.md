@@ -76,7 +76,7 @@ code -r .
 To download the extenal datasets, generate global square tiles containing mining areas:
 
 ```bash
-python src/data/make_dataset_pre.py
+python src/data/02A_make_dataset_pre.py
 ```
 
 ### Running the streamlit app for producing the source dataset
@@ -92,23 +92,23 @@ streamlit run streamlit_app/app.py
 To run all post-processing steps with preconfigured settings: 
 
 ```bash
-python src/data/make_dataset_post.py
+python src/data/06A_make_dataset_post.py
 ```
 
 Individual steps can be run with:
 
 ```bash
 # postprocess & generate bounding boxes
-python src/data/postprocess_dataset.py
+python src/data/03_postprocess_dataset.py
 
 # filter dataset to fit requirements
-python src/data/filter_and_split_dataset.py preferred_polygons --val_ratio 0.2 --test_ratio 0.1 --only_valid_surface_mines
+python src/data/04_filter_and_split_dataset.py preferred_polygons --val_ratio 0.2 --test_ratio 0.1 --only_valid_surface_mines
 
 # download S2 images & create masks
-python src/data/persist_pixels_masks.py data/processed/files --limit 25
+python src/data/05_persist_pixels_masks.py data/processed/files --limit 25
 
 # chip images
-python src/data/make_chips.py data/processed/files data/processed/chips 512 npy --must_contain_mining
+python src/data/06_make_chips.py data/processed/files data/processed/chips 512 npy --must_contain_mining
 ```
 
 ## Other Info
