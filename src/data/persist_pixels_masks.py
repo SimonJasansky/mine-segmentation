@@ -20,7 +20,7 @@ tqdm.pandas()
 
 from src.data.get_satellite_images import ReadSTAC
 
-DATASET_PROCESSED = "data/processed/mining_tiles_with_masks_and_bounding_boxes.gpkg"
+DATASET_FILTERED = "data/processed/mining_tiles_with_masks_and_bounding_boxes_filtered.gpkg"
 
 def process_row(
         row: pd.Series, 
@@ -94,27 +94,15 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("output_path", type=str, help="Path to save the output images")
-    parser.add_argument("polygon_layer", type=str, help="Name of the polygon layer in the dataset")
     parser.add_argument("--limit", type=int, help="Limit the number of rows to process")
-    parser.add_argument("--train_ratio", type=float, default=0.8, help="Ratio of data to use for training (default: 0.8)")
-    parser.add_argument("--only_valid_surface_mines", action="store_true", help="Only process valid surface mines, and ignore rejected tiles, and and tiles with brine & evaporation ponds")
     args = parser.parse_args()
     output_path = args.output_path
-    polygon_layer = args.polygon_layer
     limit = args.limit
-    train_ratio = args.train_ratio
-    only_valid_surface_mines = args.only_valid_surface_mines
 
     # Load the dataset
-    tiles = gpd.read_file(DATASET_PROCESSED, layer="tiles")
-    masks = gpd.read_file(DATASET_PROCESSED, layer=polygon_layer)
+    tiles = gpd.read_file(DATASET_FILTERED, layer="tiles")
+    masks = gpd.read_file(DATASET_FILTERED, layer="polygons")
 
-    if only_valid_surface_mines:
-        len_before = len(tiles)
-        tiles = tiles[(tiles["source_dataset"] != "rejected") & (tiles["minetype1"] in ["Surface", "Placer"])]
-        len_after = len(tiles)
-        print(f"Filtered out {len_before - len_after} rejected tiles and non-surface mines")
-        
     # Set the limit to the length of the tiles dataframe if not provided
     if limit is None:
         limit = len(tiles)
@@ -122,13 +110,16 @@ if __name__ == "__main__":
     # Limit the number of rows according to the limit
     tiles = tiles.head(limit)
 
-    # Split the data into train and val
-    train_size = int(train_ratio * len(tiles))
-    train_tiles = tiles[:train_size]
-    val_tiles = tiles[train_size:]
+    # Get the train/val ratio
+    train_tiles = tiles[tiles.split == "train"]
+    val_tiles = tiles[tiles.split == "val"]
+    test_tiles = tiles[tiles.split == "test"]
+    train_ratio = len(train_tiles) / (len(train_tiles) + len(val_tiles) + len(test_tiles))
 
     print(f"Processing {len(train_tiles)} rows for train set")
     print(f"Processing {len(val_tiles)} rows for val set")
+    print(f"Processing {len(test_tiles)} rows for test set")
+    print(f"Train/Val ratio: {train_ratio}")
 
     # make the directories for train and val
     os.makedirs(output_path + "/train", exist_ok=True)
@@ -162,14 +153,28 @@ if __name__ == "__main__":
     # Print the number of rows processed for val set
     print(f"Processed {len(val_tiles)} rows for val set")
 
+    # Apply the function to each row in the test set
+    test_tiles.progress_apply(lambda row: process_row(
+        row=row, 
+        masks=masks, 
+        stac_reader=stac_reader, 
+        bands=["B04", "B03", "B02"],
+        output_path=output_path + "/test"
+    ), axis=1)
+
+    # Print the number of rows processed for val set
+    print(f"Processed {len(test_tiles)} rows for test set")
+
     print("Checking for duplicates and removing them if necessary...")
 
     train_files = os.listdir(output_path + "/train/")
     val_files = os.listdir(output_path + "/val/")
+    test_files = os.listdir(output_path + "/test/")
 
     # check for duplicate files in the training and validation sets
     duplicate_files_train = set([x for x in train_files if train_files.count(x) > 1])
     duplicate_files_val = set([x for x in val_files if val_files.count(x) > 1])
+    duplicate_files_test = set([x for x in test_files if test_files.count(x) > 1])  
 
     if len(duplicate_files_train) > 0:
         for file in duplicate_files_train:
@@ -181,28 +186,28 @@ if __name__ == "__main__":
             os.remove(output_path + "/val/" + file)
         print(f"Removed {len(duplicate_files_val)} duplicate files from validation set")
 
-    # check if there are chips in the validation set that are also in the training set
-    train_val_set_files = set(train_files).intersection(set(val_files))
-    if len(train_val_set_files) > 0:
-        train_val_ratio = len(train_files) / (len(val_files) + len(train_files))
+    # # check if there are chips in the validation set that are also in the training set
+    # train_val_set_files = set(train_files).intersection(set(val_files))
+    # if len(train_val_set_files) > 0:
+    #     train_val_ratio = len(train_files) / (len(val_files) + len(train_files))
 
-        # if the ratio is less than 0.8, remove the duplicates from the validation set
-        if train_val_ratio < train_ratio:
-            for file in train_val_set_files:
-                os.remove(output_path + "/val/" + file)
-            print(f"Removed {len(train_val_set_files)} duplicate files from validation set")
-        # if the ratio is greater than or equal to 0.8, remove the duplicates from the training set
-        elif train_val_ratio >= train_ratio:
-            for file in train_val_set_files:
-                os.remove(output_path + "/train/" + file)
-            print(f"Removed {len(train_val_set_files)} duplicate files from training set")
+    #     # if the ratio is less than 0.8, remove the duplicates from the validation set
+    #     if train_val_ratio < train_ratio:
+    #         for file in train_val_set_files:
+    #             os.remove(output_path + "/val/" + file)
+    #         print(f"Removed {len(train_val_set_files)} duplicate files from validation set")
+    #     # if the ratio is greater than or equal to 0.8, remove the duplicates from the training set
+    #     elif train_val_ratio >= train_ratio:
+    #         for file in train_val_set_files:
+    #             os.remove(output_path + "/train/" + file)
+    #         print(f"Removed {len(train_val_set_files)} duplicate files from training set")
 
-    # recalculate the train/val ratio
-    train_files = os.listdir(output_path + "/train/")
-    val_files = os.listdir(output_path + "/val/")
-    train_val_ratio = len(train_files) / (len(val_files) + len(train_files))
+    # # recalculate the train/val ratio
+    # train_files = os.listdir(output_path + "/train/")
+    # val_files = os.listdir(output_path + "/val/")
+    # train_val_ratio = len(train_files) / (len(val_files) + len(train_files))
 
     print("Finished processing images and masks")
     print(f"Train set: {len(train_files)/2} images")
     print(f"Val set: {len(val_files)/2} images")
-    print(f"Final Train/Val ratio: {train_val_ratio}")
+    print(f"Test set: {len(test_files)/2} images")
