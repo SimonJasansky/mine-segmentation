@@ -9,8 +9,8 @@ image chips for segmentation tasks.
     python preprocess_data.py <data_dir> <output_dir> <chip_size> <chip_format> [<must_contain_mining>] [<normalize>] 
 
     Examples:
-    python src/data/make_chips.py data/processed/files data/processed/chips 512 npy
-    python src/data/make_chips.py data/processed/files data/processed/chips 1024 tif --must_contain_mining --normalize
+    python src/data/make_chips.py data/processed/files data/processed/npy/chips 512 npy
+    python src/data/make_chips.py data/processed/files data/processed/tif/chips 1024 tif --must_contain_mining --normalize
 """
 
 
@@ -23,6 +23,7 @@ import rasterio as rio
 from samgeo import split_raster
 
 from src.utils import normalize_geotiff
+from tqdm import tqdm
 
 
 def read_and_chip(file_path, chip_size, output_dir, chip_format):
@@ -94,42 +95,42 @@ def process_files(file_paths, output_dir, chip_size, chip_format):
         chip_format (str): Format to save the chips. Either 'npy' or 'tif'.
         must_contain_mining (bool): Flag to indicate if chips must contain some mining area.
     """
-    for file_path in file_paths:
-        print(f"Processing: {file_path}")
+    for file_path in tqdm(file_paths, desc="Processing files"):
+        # print(f"Processing: {file_path}")
         read_and_chip(file_path, chip_size, output_dir, chip_format)
 
+        def purge_chips(chips_dir, labels_dir, chip_format):
+            """
+            Purges chips that do not contain mining area.
 
-def purge_chips(chips_dir, labels_dir, chip_format):
-    """
-    Purges chips that do not contain mining area.
-
-    Args:
-        chips_dir (str or Path): Directory containing the chips.
-        labels_dir (str or Path): Directory containing the labels.
-        chip_format (str): Format of the chips.
-    """
-    print(f"Purging chips in {chips_dir} that do not contain mining area")
-    removed_count = 0
-    for chip_path in chips_dir.glob(f"*.{chip_format}"):
-        label_path = labels_dir / f"{chip_path.stem}.{chip_format}"
-        label_path = str(label_path).replace("_img", "_mask")
-        
-        if chip_format == "npy":
-            label = np.load(label_path)
-            if np.sum(label) == 0:
-                os.remove(chip_path)
-                os.remove(label_path)
-                removed_count += 1
+            Args:
+                chips_dir (str or Path): Directory containing the chips.
+                labels_dir (str or Path): Directory containing the labels.
+                chip_format (str): Format of the chips.
+            """
+            print(f"Purging chips in {chips_dir} that do not contain mining area")
+            removed_count = 0
+            chips = list(chips_dir.glob(f"*.{chip_format}"))
+            for chip_path in tqdm(chips, desc="Purging chips"):
+                label_path = labels_dir / f"{chip_path.stem}.{chip_format}"
+                label_path = str(label_path).replace("_img", "_mask")
                 
-        if chip_format == "tif":
-            with rio.open(label_path) as src:
-                label = src.read()
-                if np.sum(label) == 0:
-                    os.remove(chip_path)
-                    os.remove(label_path)
-                    removed_count += 1
-    
-    print(f"Removed {removed_count} chips")
+                if chip_format == "npy":
+                    label = np.load(label_path)
+                    if np.sum(label) == 0:
+                        os.remove(chip_path)
+                        os.remove(label_path)
+                        removed_count += 1
+                        
+                if chip_format == "tif":
+                    with rio.open(label_path) as src:
+                        label = src.read()
+                        if np.sum(label) == 0:
+                            os.remove(chip_path)
+                            os.remove(label_path)
+                            removed_count += 1
+            
+            print(f"Removed {removed_count} chips")
 
 def main():
     """
