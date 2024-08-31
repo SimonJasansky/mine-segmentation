@@ -6,8 +6,8 @@ data:
   val_chip_dir: data/processed/chips/npy/val/chips/
   val_label_dir: data/processed/chips/npy/val/labels/
   metadata_path: configs/cnn/cnn_segment_metadata.yaml
-  batch_size: 8
-  num_workers: 8 # Set to number of CPU cores
+  batch_size: 32
+  num_workers: 16 # Set to number of CPU cores
   platform: sentinel-2-l2a
 model:
   arch: unet
@@ -24,7 +24,7 @@ trainer:
   strategy: ddp
   devices: auto
   num_nodes: 1
-  precision: 32
+  precision: 16-mixed
   log_every_n_steps: 1
   max_epochs: 10
   accumulate_grad_batches: 1
