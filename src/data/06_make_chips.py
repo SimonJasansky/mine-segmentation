@@ -134,6 +134,51 @@ def purge_chips(chips_dir, labels_dir, chip_format):
     
     print(f"Removed {removed_count} chips")
 
+
+def check_for_nan_values(chips_dir, labels_dir, chip_format):
+    """
+    Checks for nan values in chips and removes chip+label with nan values.
+
+    Args:
+        chips_dir (str or Path): Directory containing the chips.
+        labels_dir (str or Path): Directory containing the labels.
+        chip_format (str): Format of the chips.
+    """
+    print(f"Checking for nan values in chips in {chips_dir}")
+    removed_count = 0
+    chips = list(chips_dir.glob(f"*.{chip_format}"))
+    for chip_path in tqdm(chips, desc="Checking for nan values"):
+        label_path = labels_dir / f"{chip_path.stem}.{chip_format}"
+        label_path = str(label_path).replace("_img", "_mask")
+    
+        if chip_format == "npy":
+            chip = np.load(chip_path)
+            label = np.load(label_path)
+            if np.isnan(chip).any():
+                os.remove(chip_path)
+                os.remove(label_path)
+                removed_count += 1
+            if np.isnan(label).any():
+                os.remove(chip_path)
+                os.remove(label_path)
+                removed_count += 1
+            
+
+        if chip_format == "tif":
+            with rio.open(chip_path) as src:
+                chip = src.read()
+                label = np.load(label_path)
+                if np.isnan(chip).any():
+                    os.remove(chip_path)
+                    os.remove(label_path)
+                    removed_count += 1
+                if np.isnan(label).any():
+                    os.remove(chip_path)
+                    os.remove(label_path)
+                    removed_count += 1
+    
+    print(f"Removed {removed_count} chips with nan values")
+
 def main():
     """
     Main function to process files and create chips.
@@ -193,6 +238,12 @@ def main():
         purge_chips(output_dir / "val/chips", output_dir / "val/labels", chip_format)
         purge_chips(output_dir / "test/chips", output_dir / "test/labels", chip_format)
     
+    # check for nan values in chips
+    print("Checking for nan values in chips")
+    check_for_nan_values(output_dir / "train/chips", output_dir / "train/labels", chip_format)
+    check_for_nan_values(output_dir / "val/chips", output_dir / "val/labels", chip_format)
+    check_for_nan_values(output_dir / "test/chips", output_dir / "test/labels", chip_format)   
+
     if normalize and chip_format == "tif":
         print("Normalizing chips")
         for chip_path in (output_dir / "train" / "chips").glob(f"*.{chip_format}"):
