@@ -100,18 +100,22 @@ class MineDataModule(L.LightningDataModule):
         train_label_dir (str): Directory containing training labels.
         val_chip_dir (str): Directory containing validation image chips.
         val_label_dir (str): Directory containing validation labels.
+        test_chip_dir (str): Directory containing test image chips.
+        test_label_dir (str): Directory containing test labels.
         metadata_path (str): Path to the metadata file.
         batch_size (int): Batch size for data loading.
         num_workers (int): Number of workers for data loading.
         platform (str): Platform identifier used in metadata.
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__( 
         self,
         train_chip_dir,
         train_label_dir,
         val_chip_dir,
         val_label_dir,
+        test_chip_dir,
+        test_label_dir,
         metadata_path,
         batch_size,
         num_workers,
@@ -122,6 +126,8 @@ class MineDataModule(L.LightningDataModule):
         self.train_label_dir = train_label_dir
         self.val_chip_dir = val_chip_dir
         self.val_label_dir = val_label_dir
+        self.test_chip_dir = test_chip_dir
+        self.test_label_dir = test_label_dir
         self.metadata = Box(yaml.safe_load(open(metadata_path)))
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -144,6 +150,13 @@ class MineDataModule(L.LightningDataModule):
             self.val_ds = MineDataset(
                 self.val_chip_dir,
                 self.val_label_dir,
+                self.metadata,
+                self.platform,
+            )
+        elif stage == "test":
+            self.test_ds = MineDataset(
+                self.test_chip_dir,
+                self.test_label_dir,
                 self.metadata,
                 self.platform,
             )
@@ -171,6 +184,19 @@ class MineDataModule(L.LightningDataModule):
         """
         return DataLoader(
             self.val_ds,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+        )
+
+    def test_dataloader(self):
+        """
+        Create DataLoader for test data.
+
+        Returns:
+            DataLoader: DataLoader for test dataset.
+        """
+        return DataLoader(
+            self.test_ds,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
         )
