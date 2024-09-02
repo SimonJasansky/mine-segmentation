@@ -10,6 +10,12 @@ References:
 - https://pytorch-lightning.medium.com/introducing-lightningcli-v2-supercharge-your-training-c070d43c7dd6
 """
 
+import torch
+
+# Set matmul precision
+if torch.cuda.is_available():
+    torch.set_float32_matmul_precision('medium')  # or 'high'
+
 from lightning.pytorch.cli import LightningCLI
 
 from src.models.datamodule import MineDataModule
