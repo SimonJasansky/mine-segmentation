@@ -45,7 +45,7 @@ class MineSegmentor(L.LightningModule):
             ckpt_path=ckpt_path,
         )
 
-        self.loss_fn = smp.losses.JaccardLoss(mode="binary")
+        self.loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
         self.iou = BinaryJaccardIndex()
         self.f1 = BinaryF1Score()
 

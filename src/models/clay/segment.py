@@ -12,8 +12,8 @@ References:
 
 from lightning.pytorch.cli import LightningCLI
 
-from ..datamodule import MineDataModule 
-from segment.model import MineSegmentor
+from src.models.datamodule import MineDataModule 
+from src.models.clay.segment.model import MineSegmentor
 
 
 # %%

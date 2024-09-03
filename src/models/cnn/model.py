@@ -46,8 +46,8 @@ class MineSegmentorCNN(L.LightningModule):
         )
 
         self.loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
-        self.iou = BinaryJaccardIndex()
-        self.f1 = BinaryF1Score()
+        self.iou = BinaryJaccardIndex() # aka Jaccard
+        self.f1 = BinaryF1Score() # aka Dice 
 
     def forward(self, image):
         """
