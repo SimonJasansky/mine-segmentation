@@ -6,7 +6,7 @@ data:
   val_chip_dir: data/processed/chips/npy/val/chips/
   val_label_dir: data/processed/chips/npy/val/labels/
   metadata_path: configs/clay/clay_segment_metadata.yaml
-  batch_size: 8
+  batch_size: 6
   num_workers: 16 # Set to number of CPU cores
   platform: sentinel-2-l2a
 model:
@@ -28,10 +28,11 @@ trainer:
   num_nodes: 1
   precision: 16-mixed
   log_every_n_steps: 1
-  max_epochs: 20
+  max_epochs: 10
   accumulate_grad_batches: 1
   default_root_dir: src/models/clay
   fast_dev_run: False
+  # limit_train_batches: 1.0
   num_sanity_val_steps: 0
   logger:
     - class_path: lightning.pytorch.loggers.WandbLogger
@@ -42,7 +43,7 @@ trainer:
   callbacks:
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
-        dirpath: clay/models
+        dirpath: models/clay
         auto_insert_metric_name: False
         filename: mineseg-clay-segment_epoch-{epoch:02d}_val-iou-{val/iou:.4f}
         monitor: val/iou
