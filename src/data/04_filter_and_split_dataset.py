@@ -11,6 +11,7 @@ import geopandas as gpd
 from shapely.ops import unary_union
 from shapely.geometry import mapping, box, shape
 import numpy as np
+import pandas as pd
 import shapely
 import json
 import os
@@ -35,6 +36,23 @@ def split_data(tiles, val_ratio=0.2, test_ratio=0.1):
         GeoDataFrame: The input data with an additional column 'split' that contains the split type.
     """
     print("Splitting valid surface tiles into train, validation, and test sets...")
+    
+    n_test = int(len(tiles) * test_ratio)
+
+    # for each tile, check with how many other tiles it overlaps
+    tiles["overlaps"] = tiles["geometry"].apply(lambda x: tiles["geometry"].apply(lambda y: x.overlaps(y)).sum())
+
+    if len(tiles[tiles["overlaps"] == 0]) < n_test:
+        raise ValueError(f"Number of tiles that do not overlap with any other tiles ({len(tiles[tiles['overlaps'] == 0])}) is less than the number of test tiles ({n_test}).")
+
+    # assign the test split directly only to tiles that overlap with no other tiles
+    test_tiles = tiles[tiles["overlaps"] == 0].sample(n_test)
+    test_tiles["split"] = "test"
+    print(f"Out of {len(tiles[tiles['overlaps'] == 0])} tiles that do not overlap with any other tiles, {len(test_tiles)} are assigned to the test set.")
+    
+    # remove the test tiles from the dataset
+    tiles = tiles.drop(test_tiles.index)
+
     print(f"Creating graph for {len(tiles)} tiles...")
 
     # Step 1: Create a graph
@@ -67,17 +85,17 @@ def split_data(tiles, val_ratio=0.2, test_ratio=0.1):
     unique_groups = tiles['overlap_group'].unique()
     np.random.shuffle(unique_groups)
 
-    n_val = int(len(unique_groups) * val_ratio)
-    n_test = int(len(unique_groups) * test_ratio)
-    
-    val_groups = unique_groups[:n_val]
-    test_groups = unique_groups[n_val:n_val + n_test]
+    n_val = int((len(unique_groups) + n_test) * val_ratio)
 
+    val_groups = unique_groups[:n_val]
     tiles['split'] = 'train'
     tiles.loc[tiles['overlap_group'].isin(val_groups), 'split'] = 'val'
-    tiles.loc[tiles['overlap_group'].isin(test_groups), 'split'] = 'test'
 
-    return tiles
+    # combine the test and validation dataframes
+    tiles = pd.concat([tiles, test_tiles])
+
+    return tiles.drop(columns=["overlaps", "overlap_group"])
+
 
 if __name__ == '__main__':
     # Parse arguments
