@@ -130,6 +130,18 @@ if __name__ == '__main__':
     # Split the data into train, validation, and test sets
     tiles = split_data(tiles, val_ratio=val_ratio, test_ratio=test_ratio)
 
+    # make sure both tiles and polygons are in the same order
+    tiles["tile_id"] = tiles["tile_id"].astype(int)
+    masks["tile_id"] = masks["tile_id"].astype(int)
+    tiles = tiles.sort_values("tile_id")
+    masks = masks.sort_values("tile_id")
+
+    # sanity checks
+    assert np.all(tiles.tile_id == masks.tile_id)
+    assert np.all(tiles.split.notna())
+    assert len(tiles) == len(tiles.tile_id.unique())
+    assert len(masks) == len(masks.tile_id.unique())
+
     # Save the output
     tiles.to_file(DATASET_OUT, layer="tiles", driver="GPKG")
     masks.to_file(DATASET_OUT, layer="polygons", driver="GPKG")
