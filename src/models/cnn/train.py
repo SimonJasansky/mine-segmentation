@@ -11,7 +11,6 @@ References:
 """
 
 import torch
-import argparse
 
 # Set matmul precision
 if torch.cuda.is_available():
@@ -28,22 +27,8 @@ def cli_main():
     """
     Command-line inteface to run the CNN with MineDataModule.
     """
-    parser = argparse.ArgumentParser(description="Train the neural network model.")
-    parser.add_argument('--data_augmentation', action='store_true', help="Apply data augmentation.")
-    args = parser.parse_args()
-
-    cli = LightningCLI(
-        MineSegmentorCNN,
-        MineDataModule,
-        save_config_kwargs={"overwrite": True},
-        run=False
-    )
-
-    # Update datamodule with flip argument
-    cli.datamodule.data_augmentation = args.data_augmentation
-    cli.trainer.fit(cli.model, datamodule=cli.datamodule)
+    cli = LightningCLI(MineSegmentorCNN, MineDataModule, save_config_kwargs={"overwrite": True})
     return cli
-
 
 
 # %%
