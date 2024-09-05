@@ -22,7 +22,6 @@ import networkx as nx
 
 DATASET_IN = "data/processed/mining_tiles_with_masks_and_bounding_boxes.gpkg"
 DATASET_OUT = "data/processed/mining_tiles_with_masks_and_bounding_boxes_filtered.gpkg"
-
 def split_data(tiles, val_ratio=0.2, test_ratio=0.1):
     """
     Split the data into train, validation, and test sets based on the overlap of the polygons.
@@ -36,6 +35,8 @@ def split_data(tiles, val_ratio=0.2, test_ratio=0.1):
         GeoDataFrame: The input data with an additional column 'split' that contains the split type.
     """
     print("Splitting valid surface tiles into train, validation, and test sets...")
+    
+    np.random.seed(42)  # Set the seed for reproducibility
     
     n_test = int(len(tiles) * test_ratio)
 
