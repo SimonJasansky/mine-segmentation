@@ -27,12 +27,14 @@ class MineDataset(Dataset):
         label_dir (str): Directory containing the labels.
         metadata (Box): Metadata for normalization and other dataset-specific details.
         platform (str): Platform identifier used in metadata.
+        data_augmentation (bool): Whether to apply transformations for data augmentation.
     """
 
-    def __init__(self, chip_dir, label_dir, metadata, platform):
+    def __init__(self, chip_dir, label_dir, metadata, platform, data_augmentation=False):
         self.chip_dir = Path(chip_dir)
         self.label_dir = Path(label_dir)
         self.metadata = metadata
+        self.data_augmentation = data_augmentation
         self.image_transform, self.flip_transform = self.create_transforms(
             mean=list(metadata[platform].bands.mean.values()),
             std=list(metadata[platform].bands.std.values()),
@@ -57,7 +59,7 @@ class MineDataset(Dataset):
         flip_transform = v2.Compose([
             v2.RandomHorizontalFlip(p=0.5),
             v2.RandomVerticalFlip(p=0.5),
-        ])
+        ]) if self.data_augmentation else v2.Compose([])
         return image_transform, flip_transform
 
     def __len__(self):
@@ -90,7 +92,8 @@ class MineDataset(Dataset):
         chip_tensor = self.image_transform(chip_tensor)
 
         # Apply the same transformations to both image and mask
-        chip_tensor, label_tensor = self.flip_transform(chip_tensor, label_tensor)
+        if self.data_augmentation:
+            chip_tensor, label_tensor = self.flip_transform(chip_tensor, label_tensor)
 
         sample = {
             "pixels": chip_tensor,
@@ -116,6 +119,8 @@ class MineDataModule(L.LightningDataModule):
         batch_size (int): Batch size for data loading.
         num_workers (int): Number of workers for data loading.
         platform (str): Platform identifier used in metadata.
+        data_augmentation (bool): Whether to apply transformations for data augmentation.
+
     """
 
     def __init__( 
@@ -130,6 +135,7 @@ class MineDataModule(L.LightningDataModule):
         batch_size,
         num_workers,
         platform,
+        data_augmentation=False,
     ):
         super().__init__()
         self.train_chip_dir = train_chip_dir
@@ -142,6 +148,7 @@ class MineDataModule(L.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.platform = platform
+        self.data_augmentation = data_augmentation
 
     def setup(self, stage=None):
         """
@@ -156,12 +163,14 @@ class MineDataModule(L.LightningDataModule):
                 self.train_label_dir,
                 self.metadata,
                 self.platform,
+                self.data_augmentation,
             )
             self.val_ds = MineDataset(
                 self.val_chip_dir,
                 self.val_label_dir,
                 self.metadata,
                 self.platform,
+                False # No data augmentation for validation
             )
         elif stage == "test":
             self.test_ds = MineDataset(
@@ -169,6 +178,7 @@ class MineDataModule(L.LightningDataModule):
                 self.test_label_dir,
                 self.metadata,
                 self.platform,
+                False # No data augmentation for test
             )
 
     def train_dataloader(self):
