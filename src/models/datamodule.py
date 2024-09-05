@@ -33,7 +33,7 @@ class MineDataset(Dataset):
         self.chip_dir = Path(chip_dir)
         self.label_dir = Path(label_dir)
         self.metadata = metadata
-        self.transform = self.create_transforms(
+        self.image_transform, self.flip_transform = self.create_transforms(
             mean=list(metadata[platform].bands.mean.values()),
             std=list(metadata[platform].bands.std.values()),
         )
@@ -44,20 +44,21 @@ class MineDataset(Dataset):
 
     def create_transforms(self, mean, std):
         """
-        Create normalization transforms.
+        Create normalization and flipping transforms.
 
         Args:
             mean (list): Mean values for normalization.
             std (list): Standard deviation values for normalization.
 
         Returns:
-            torchvision.transforms.Compose: A composition of transforms.
+            tuple: A tuple containing the image transform and the flip transform.
         """
-        return v2.Compose(
-            [
-                v2.Normalize(mean=mean, std=std),
-            ],
-        )
+        image_transform = v2.Normalize(mean=mean, std=std)
+        flip_transform = v2.Compose([
+            v2.RandomHorizontalFlip(p=0.5),
+            v2.RandomVerticalFlip(p=0.5),
+        ])
+        return image_transform, flip_transform
 
     def __len__(self):
         return len(self.chips)
@@ -82,9 +83,18 @@ class MineDataset(Dataset):
         label_mapping = {0: 0, 1: 1}
         remapped_label = np.vectorize(label_mapping.get)(label)
 
+        chip_tensor = torch.from_numpy(chip)
+        label_tensor = torch.from_numpy(remapped_label[0])
+
+        # Apply normalization only to the image
+        chip_tensor = self.image_transform(chip_tensor)
+
+        # Apply the same transformations to both image and mask
+        chip_tensor, label_tensor = self.flip_transform(chip_tensor, label_tensor)
+
         sample = {
-            "pixels": self.transform(torch.from_numpy(chip)),
-            "label": torch.from_numpy(remapped_label[0]),
+            "pixels": chip_tensor,
+            "label": label_tensor,
             "time": torch.zeros(4),  # Placeholder for time information
             "latlon": torch.zeros(4),  # Placeholder for latlon information
         }

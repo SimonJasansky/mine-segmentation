@@ -108,7 +108,7 @@ python src/data/04_filter_and_split_dataset.py preferred_polygons --val_ratio 0.
 python src/data/05_persist_pixels_masks.py data/processed/files --limit 25
 
 # chip images
-python src/data/06_make_chips.py data/processed/files data/processed/chips 512 npy --must_contain_mining
+python src/data/06_make_chips.py data/processed/files data/processed/chips/npy 512 npy --must_contain_mining
 ```
 
 ## Other Info
