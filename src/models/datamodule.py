@@ -16,6 +16,7 @@ import yaml
 from box import Box
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import v2
+from torchvision import tv_tensors
 
 
 class MineDataset(Dataset):
@@ -30,7 +31,7 @@ class MineDataset(Dataset):
         data_augmentation (bool): Whether to apply transformations for data augmentation.
     """
 
-    def __init__(self, chip_dir, label_dir, metadata, platform, data_augmentation=False):
+    def __init__(self, chip_dir, label_dir, metadata, platform, data_augmentation):
         self.chip_dir = Path(chip_dir)
         self.label_dir = Path(label_dir)
         self.metadata = metadata
@@ -56,10 +57,13 @@ class MineDataset(Dataset):
             tuple: A tuple containing the image transform and the flip transform.
         """
         image_transform = v2.Normalize(mean=mean, std=std)
+
         flip_transform = v2.Compose([
             v2.RandomHorizontalFlip(p=0.5),
             v2.RandomVerticalFlip(p=0.5),
-        ]) if self.data_augmentation else v2.Compose([])
+            # v2.RandomResizedCrop(size=512, scale=(0.9, 1.0)),
+        ]) if self.data_augmentation else None
+
         return image_transform, flip_transform
 
     def __len__(self):
@@ -88,12 +92,15 @@ class MineDataset(Dataset):
         chip_tensor = torch.from_numpy(chip)
         label_tensor = torch.from_numpy(remapped_label[0])
 
-        # Apply normalization only to the image
-        chip_tensor = self.image_transform(chip_tensor)
+        # convert label_tensor to tv_tensor
+        label_tensor = tv_tensors.Mask(label_tensor)
 
         # Apply the same transformations to both image and mask
         if self.data_augmentation:
             chip_tensor, label_tensor = self.flip_transform(chip_tensor, label_tensor)
+
+        # Apply normalization only to the image
+        chip_tensor = self.image_transform(chip_tensor)
 
         sample = {
             "pixels": chip_tensor,
@@ -135,7 +142,7 @@ class MineDataModule(L.LightningDataModule):
         batch_size,
         num_workers,
         platform,
-        data_augmentation=False,
+        data_augmentation,
     ):
         super().__init__()
         self.train_chip_dir = train_chip_dir
@@ -149,6 +156,8 @@ class MineDataModule(L.LightningDataModule):
         self.num_workers = num_workers
         self.platform = platform
         self.data_augmentation = data_augmentation
+        # print("Batch size: ", self.batch_size)
+        # print("Data augmentation: ", self.data_augmentation)
 
     def setup(self, stage=None):
         """
