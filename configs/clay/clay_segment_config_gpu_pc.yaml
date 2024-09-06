@@ -9,6 +9,7 @@ data:
   batch_size: 1
   num_workers: 8 # Set to number of CPU cores
   platform: sentinel-2-l2a
+  data_augmentation: True
 model:
   num_classes: 1
   feature_maps:
