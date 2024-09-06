@@ -179,7 +179,7 @@ class MineDataModule(L.LightningDataModule):
                 self.val_label_dir,
                 self.metadata,
                 self.platform,
-                False # No data augmentation for validation
+                self.data_augmentation,
             )
         elif stage == "test":
             self.test_ds = MineDataset(
