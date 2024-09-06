@@ -11,6 +11,7 @@ References:
 """
 
 import torch
+import yaml
 
 # Set matmul precision
 if torch.cuda.is_available():
@@ -28,6 +29,10 @@ def cli_main():
     Command-line inteface to run the CNN with MineDataModule.
     """
     cli = LightningCLI(MineSegmentorCNN, MineDataModule, save_config_kwargs={"overwrite": True})
+
+    # Print the configuration
+    print(yaml.dump(cli.config))
+
     return cli
 
 
