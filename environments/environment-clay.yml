@@ -39,6 +39,7 @@ dependencies:
   - leafmap
   - streamlit
   - seaborn
+  - nbconvert
   - pip
   - pip:
     - segmentation-models-pytorch
