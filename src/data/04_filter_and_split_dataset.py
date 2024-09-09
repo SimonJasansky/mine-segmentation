@@ -3,7 +3,7 @@ r"""
 Example:
 
 ```bash
-python src/data/filter_and_split_dataset.py preferred_polygons --val_ratio 0.2 --test_ratio 0.1 --only_valid_surface_mines
+python src/data/04_filter_and_split_dataset.py preferred_polygons --val_ratio 0.18 --test_ratio 0.07 --only_valid_surface_mines
 ```
 
 """
@@ -44,12 +44,22 @@ def split_data(tiles, val_ratio=0.2, test_ratio=0.1):
     tiles["overlaps"] = tiles["geometry"].apply(lambda x: tiles["geometry"].apply(lambda y: x.overlaps(y)).sum())
 
     if len(tiles[tiles["overlaps"] == 0]) < n_test:
-        raise ValueError(f"Number of tiles that do not overlap with any other tiles ({len(tiles[tiles['overlaps'] == 0])}) is less than the number of test tiles ({n_test}).")
+        raise ValueError(f"Number of tiles that do not overlap with any other tiles, and that have both maus and tang polygons ({len(tiles[tiles['overlaps'] == 0])}) is less than the number of test tiles ({n_test}).")
 
-    # assign the test split directly only to tiles that overlap with no other tiles
-    test_tiles = tiles[tiles["overlaps"] == 0].sample(n_test)
+    # assign the test split directly only to tiles that overlap with no other tiles    
+    test_tiles = tiles[tiles["overlaps"] == 0]
+    print(f"{len(test_tiles)} tiles do not overlap with any other tiles.")
+
+    # and that have both maus and tang polygons (for validation purposes)
+    test_tiles = test_tiles[test_tiles["source_dataset"] == "both"]
+    print(f"{len(test_tiles)} tiles do not overlap with any other tiles and have both maus and tang polygons.")
+
+    # take a random sample of n_test tiles
+    n_test_tiles = len(test_tiles)
+    test_tiles = test_tiles.sample(n_test)
+
     test_tiles["split"] = "test"
-    print(f"Out of {len(tiles[tiles['overlaps'] == 0])} tiles that do not overlap with any other tiles, {len(test_tiles)} are assigned to the test set.")
+    print(f"Out of {n_test_tiles} tiles that do not overlap with any other tiles and that have both maus and tang polygons, {len(test_tiles)} are assigned to the test set.")
     
     # remove the test tiles from the dataset
     tiles = tiles.drop(test_tiles.index)

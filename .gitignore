@@ -82,8 +82,13 @@ data/*
 !data/interim/
 data/raw/*
 data/interim/*
+# except files for the mine annotation app
 !data/raw/mining_tiles_with_masks.gpkg
 !data/interim/erroneous_tiles.gpkg
+# except the final dataset
+!data/final_dataset.gpkg
+# except the final test tiles wit additional  annotation
+!data/raw/mining_tiles_test_annotations.gpkg
 
 # Mac OS-specific storage files
 .DS_Store
