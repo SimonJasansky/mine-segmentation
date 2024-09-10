@@ -3,7 +3,7 @@ r"""
 Example:
 
 ```bash
-python src/data/persist_pixels_masks.py data/processed/files preferred_polygons --limit 25 --train_ratio 0.8 --only_valid_surface_mines
+python src/data/persist_pixels_masks.py data/processed/files preferred_polygons --limit 25
 ```
 
 """
@@ -20,7 +20,7 @@ tqdm.pandas()
 
 from src.data.get_satellite_images import ReadSTAC
 
-DATASET_FILTERED = "data/processed/mining_tiles_with_masks_and_bounding_boxes_filtered.gpkg"
+DATASET_PROCESSED = "data/processed/mining_tiles_with_masks_and_bounding_boxes.gpkg"
 
 def process_row(
         row: pd.Series, 
@@ -94,14 +94,23 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("output_path", type=str, help="Path to save the output images")
+    parser.add_argument("polygon_layer", type=str, help="Name of the polygon layer in the dataset")
     parser.add_argument("--limit", type=int, help="Limit the number of rows to process")
     args = parser.parse_args()
     output_path = args.output_path
+    polygon_layer = args.polygon_layer
     limit = args.limit
 
     # Load the dataset
-    tiles = gpd.read_file(DATASET_FILTERED, layer="tiles")
-    masks = gpd.read_file(DATASET_FILTERED, layer="polygons")
+    print("Processing polygons from polygon layer " + polygon_layer)
+    tiles = gpd.read_file(DATASET_PROCESSED, layer="tiles")
+    masks = gpd.read_file(DATASET_PROCESSED, layer=polygon_layer)
+
+    # filter the tiles 
+    tiles = tiles[tiles.split.isin(["train", "val", "test"])]
+    masks = masks[masks.tile_id.isin(tiles.tile_id)]
+
+    print(f"{len(tiles)} tiles, {len(masks)} masks available. ")
 
     # Set the limit to the length of the tiles dataframe if not provided
     if limit is None:

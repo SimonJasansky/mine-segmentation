@@ -20,8 +20,8 @@ import warnings; warnings.filterwarnings('ignore', 'GeoSeries.notna', UserWarnin
 from tqdm import tqdm
 import networkx as nx
 
-DATASET_IN = "data/processed/mining_tiles_with_masks_and_bounding_boxes.gpkg"
-DATASET_OUT = "data/processed/mining_tiles_with_masks_and_bounding_boxes_filtered.gpkg"
+DATASET_PROCESSED = "data/processed/mining_tiles_with_masks_and_bounding_boxes.gpkg"
+
 def split_data(tiles, val_ratio=0.2, test_ratio=0.1):
     """
     Split the data into train, validation, and test sets based on the overlap of the polygons.
@@ -36,7 +36,7 @@ def split_data(tiles, val_ratio=0.2, test_ratio=0.1):
     """
     print("Splitting valid surface tiles into train, validation, and test sets...")
     
-    np.random.seed(42)  # Set the seed for reproducibility
+    np.random.seed(1234)  # Set the seed for reproducibility
     
     n_test = int(len(tiles) * test_ratio)
 
@@ -122,40 +122,38 @@ if __name__ == '__main__':
     only_valid_surface_mines = args.only_valid_surface_mines
 
     # Check if dataset exists
-    if not os.path.exists(DATASET_IN):
-        raise FileNotFoundError(f"Dataset not found at {DATASET_IN}")
+    if not os.path.exists(DATASET_PROCESSED):
+        raise FileNotFoundError(f"Dataset not found at {DATASET_PROCESSED}")
 
-    tiles = gpd.read_file(DATASET_IN, layer="tiles")
-    masks = gpd.read_file(DATASET_IN, layer=polygon_layer)
+    tiles_original = gpd.read_file(DATASET_PROCESSED, layer="tiles")
+    tiles_original["tile_id"] = tiles_original["tile_id"].astype(int)
+    # masks = gpd.read_file(DATASET_PROCESSED, layer=polygon_layer)
 
     if only_valid_surface_mines:
-        len_before = len(tiles)
-        tiles = tiles[(tiles["source_dataset"] != "rejected") & (tiles["minetype1"].isin(["Surface", "Placer"]))]
+        len_before = len(tiles_original)
+        tiles = tiles_original[(tiles_original["source_dataset"] != "rejected") & (tiles_original["minetype1"].isin(["Surface", "Placer"]))]
         len_after = len(tiles)
         print(f"Filtered out {len_before - len_after} rejected tiles and non-surface mines")
 
     # filter the polygons according to the tile_ids in the filtered tiles
     tile_ids = tiles.tile_id.unique()
-    masks = masks[masks.tile_id.isin(tile_ids)]
 
     # Split the data into train, validation, and test sets
     tiles = split_data(tiles, val_ratio=val_ratio, test_ratio=test_ratio)
 
     # make sure both tiles and polygons are in the same order
     tiles["tile_id"] = tiles["tile_id"].astype(int)
-    masks["tile_id"] = masks["tile_id"].astype(int)
     tiles = tiles.sort_values("tile_id")
-    masks = masks.sort_values("tile_id")
 
     # sanity checks
-    assert np.all(tiles.tile_id == masks.tile_id)
     assert np.all(tiles.split.notna())
     assert len(tiles) == len(tiles.tile_id.unique())
-    assert len(masks) == len(masks.tile_id.unique())
+
+    # merge the split column to tiles_original
+    tiles_original = tiles_original.merge(tiles[["tile_id", "split"]], on="tile_id", how="left")
 
     # Save the output
-    tiles.to_file(DATASET_OUT, layer="tiles", driver="GPKG")
-    masks.to_file(DATASET_OUT, layer="polygons", driver="GPKG")
+    tiles_original.to_file(DATASET_PROCESSED, layer="tiles", driver="GPKG")
 
     # print the train/val/test split ratio
     train_tiles = tiles[tiles.split == "train"]
@@ -163,4 +161,4 @@ if __name__ == '__main__':
     test_tiles = tiles[tiles.split == "test"]
     print(f"Train/Val/Test split: {len(train_tiles)}/{len(val_tiles)}/{len(test_tiles)}")
 
-    print(f"Saved filtered dataset, containinig {len(tiles)} records, to {DATASET_OUT}")
+    print(f"Saved filtered dataset, containinig {len(tiles)} valid records, to {DATASET_PROCESSED}")

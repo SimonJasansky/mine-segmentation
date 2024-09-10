@@ -71,6 +71,11 @@ if __name__ == '__main__':
     maus_polygons = gpd.read_file(DATASET_RAW, layer="maus_polygons")
     tang_polygons = gpd.read_file(DATASET_RAW, layer="tang_polygons")
 
+    # convert tile_id to integer
+    tiles["tile_id"] = tiles["tile_id"].astype(int)
+    maus_polygons["tile_id"] = maus_polygons["tile_id"].astype(int)
+    tang_polygons["tile_id"] = tang_polygons["tile_id"].astype(int)
+
     # Remove duplicates
     tiles, maus_polygons, tang_polygons = remove_duplicates(tiles, maus_polygons, tang_polygons)
     
