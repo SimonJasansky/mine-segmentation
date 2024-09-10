@@ -102,10 +102,10 @@ Individual steps can be run with:
 python src/data/03_postprocess_dataset.py
 
 # filter dataset to fit requirements
-python src/data/04_filter_and_split_dataset.py preferred_polygons --val_ratio 0.2 --test_ratio 0.1 --only_valid_surface_mines
+python src/data/04_filter_and_split_dataset.py preferred_polygons --val_ratio 0.18 --test_ratio 0.07 --only_valid_surface_mines
 
 # download S2 images & create masks
-python src/data/05_persist_pixels_masks.py data/processed/files --limit 25
+python src/data/05_persist_pixels_masks.py data/processed/files preferred_polygons --limit 25
 
 # chip images
 python src/data/06_make_chips.py data/processed/files data/processed/chips/npy 512 npy --must_contain_mining
