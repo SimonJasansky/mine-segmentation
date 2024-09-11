@@ -90,6 +90,35 @@ def process_row(
                        height=2048, width=2048, count=1, dtype=np.uint8, crs=stack.crs, transform=stack.rio.transform()) as dst:
         dst.write(mask_raster, 1)
 
+
+def clean_directory(directory: str, tiles: pd.DataFrame, split: str) -> None:
+    """
+    Remove all files in a directory that are not in the corresponding split. 
+
+    Args:
+        directory (str): The directory to clean.
+        tiles (pd.DataFrame): The DataFrame containing the tiles.
+        split (str): The split to keep.
+
+    Returns:
+        None
+    """
+    print(f"Cleaning directory {directory} ...")
+
+    files = os.listdir(directory)
+    tiles = tiles[tiles.split == split]
+    allowed_tiles = tiles.tile_id.values
+
+    i = 0
+    for f in files:
+        tile_id = f.split("_")[0]
+        tile_id = int(tile_id)
+        if tile_id not in allowed_tiles:
+            os.remove(directory + "/" + f)
+            # print(f"Removed {f} from {directory}")
+            i += 1
+
+    print(f"Removed {i} files from {directory}")
 if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
@@ -112,6 +141,16 @@ if __name__ == "__main__":
 
     print(f"{len(tiles)} tiles, {len(masks)} masks available. ")
 
+    # make the directories for train, val, and test
+    os.makedirs(output_path + "/train", exist_ok=True)
+    os.makedirs(output_path + "/val", exist_ok=True)
+    os.makedirs(output_path + "/test", exist_ok=True)
+
+    # clean the directories
+    clean_directory(output_path + "/train", tiles, "train")
+    clean_directory(output_path + "/val", tiles, "val")
+    clean_directory(output_path + "/test", tiles, "test")
+
     # Set the limit to the length of the tiles dataframe if not provided
     if limit is None:
         limit = len(tiles)
@@ -127,11 +166,6 @@ if __name__ == "__main__":
     print(f"Processing {len(train_tiles)} rows for train set ({len(train_tiles)/len(tiles)*100:.2f}%)")
     print(f"Processing {len(val_tiles)} rows for val set ({len(val_tiles)/len(tiles)*100:.2f}%)")
     print(f"Processing {len(test_tiles)} rows for test set ({len(test_tiles)/len(tiles)*100:.2f}%)")
-
-    # make the directories for train and val
-    os.makedirs(output_path + "/train", exist_ok=True)
-    os.makedirs(output_path + "/val", exist_ok=True)
-    os.makedirs(output_path + "/test", exist_ok=True)
 
     # Initialize the STAC reader
     api_url="https://planetarycomputer.microsoft.com/api/stac/v1"
