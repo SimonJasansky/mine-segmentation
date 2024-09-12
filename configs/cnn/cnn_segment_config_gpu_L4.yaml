@@ -1,15 +1,16 @@
 # lightning.pytorch==2.1.2
 seed_everything: 42
 data:
-  train_chip_dir: data/processed/chips/npy/2048/train/chips/
-  train_label_dir: data/processed/chips/npy/2048/train/labels/
-  val_chip_dir: data/processed/chips/npy/2048/val/chips/
-  val_label_dir: data/processed/chips/npy/2048/val/labels/
+  train_chip_dir: data/processed/chips/npy/1024/train/chips/
+  train_label_dir: data/processed/chips/npy/1024/train/labels/
+  val_chip_dir: data/processed/chips/npy/1024/val/chips/
+  val_label_dir: data/processed/chips/npy/1024/val/labels/
   metadata_path: configs/cnn/cnn_segment_metadata.yaml
-  batch_size: 6
+  batch_size: 12
   num_workers: 16 # Set to number of CPU cores
   platform: sentinel-2-l2a
   data_augmentation: True
+  chip_size: 1024
 model:
   arch: unet
   encoder_name: resnet34
@@ -25,9 +26,9 @@ trainer:
   strategy: ddp
   devices: auto
   num_nodes: 1
-  precision: 16
+  precision: 16-mixed
   log_every_n_steps: 1
-  max_epochs: 20
+  max_epochs: 18
   accumulate_grad_batches: 1
   default_root_dir: src/models/cnn
   fast_dev_run: False
