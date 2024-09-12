@@ -101,7 +101,7 @@ def process_files(file_paths, output_dir, chip_size, chip_format):
         read_and_chip(file_path, chip_size, output_dir, chip_format)
 
 
-def purge_chips(chips_dir, labels_dir, chip_format):
+def purge_chips(chips_dir, labels_dir, chip_format, testset_mode=False):
     """
     Purges chips that do not contain mining area.
 
@@ -109,30 +109,52 @@ def purge_chips(chips_dir, labels_dir, chip_format):
         chips_dir (str or Path): Directory containing the chips.
         labels_dir (str or Path): Directory containing the labels.
         chip_format (str): Format of the chips.
+        testset_mode (bool): Flag to indicate if the chips are from the test set. In case they are, add "nominearea" instead of removing them.
     """
+    if type(chips_dir) == str:
+        chips_dir = Path(chips_dir)
+    if type(labels_dir) == str:
+        labels_dir = Path(labels_dir)
+    
     print(f"Purging chips in {chips_dir} that do not contain mining area")
     removed_count = 0
+    renamed_count = 0
     chips = list(chips_dir.glob(f"*.{chip_format}"))
     for chip_path in tqdm(chips, desc="Purging chips"):
         label_path = labels_dir / f"{chip_path.stem}.{chip_format}"
         label_path = str(label_path).replace("_img", "_mask")
+        label_path = Path(label_path)
         
         if chip_format == "npy":
             label = np.load(label_path)
             if np.sum(label) == 0:
-                os.remove(chip_path)
-                os.remove(label_path)
-                removed_count += 1
+                if testset_mode:
+                    new_chip_path = chip_path.parent / f"{chip_path.stem}_nominearea.{chip_format}"
+                    chip_path.rename(new_chip_path)
+                    new_label_path = label_path.parent / f"{label_path.stem}_nominearea.{chip_format}"
+                    label_path.rename(new_label_path)
+                    renamed_count += 1
+                else:
+                    os.remove(chip_path)
+                    os.remove(label_path)
+                    removed_count += 1
                 
         if chip_format == "tif":
             with rio.open(label_path) as src:
                 label = src.read()
                 if np.sum(label) == 0:
-                    os.remove(chip_path)
-                    os.remove(label_path)
-                    removed_count += 1
+                    if testset_mode:
+                        new_chip_path = chip_path.parent / f"{chip_path.stem}_nominearea.{chip_format}"
+                        chip_path.rename(new_chip_path)
+                        new_label_path = label_path.parent / f"{label_path.stem}_nominearea.{chip_format}"
+                        label_path.rename(new_label_path)
+                        renamed_count += 1
+                    else:
+                        os.remove(chip_path)
+                        os.remove(label_path)
+                        removed_count += 1
     
-    print(f"Removed {removed_count} chips")
+    print(f"Removed {removed_count} chips, renamed {renamed_count} chips without mining area")
 
 
 def check_for_nan_values(chips_dir, labels_dir, chip_format):
@@ -163,7 +185,6 @@ def check_for_nan_values(chips_dir, labels_dir, chip_format):
                 os.remove(label_path)
                 removed_count += 1
             
-
         if chip_format == "tif":
             with rio.open(chip_path) as src:
                 chip = src.read()
@@ -236,7 +257,7 @@ def main():
         print("Purging chips that do not contain mining area")
         purge_chips(output_dir / "train/chips", output_dir / "train/labels", chip_format)
         purge_chips(output_dir / "val/chips", output_dir / "val/labels", chip_format)
-        purge_chips(output_dir / "test/chips", output_dir / "test/labels", chip_format)
+        purge_chips(output_dir / "test/chips", output_dir / "test/labels", chip_format, testset_mode=True)
     
     # check for nan values in chips
     print("Checking for nan values in chips")
@@ -256,7 +277,12 @@ def main():
     print(f"Chips saved to {output_dir}")
     print(f"Nr. Train chips: {len(list((output_dir / 'train' / 'chips').glob(f'*.{chip_format}')))}")
     print(f"Nr. Val chips: {len(list((output_dir / 'val' / 'chips').glob(f'*.{chip_format}')))}")
-    print(f"Nr. Test chips: {len(list((output_dir / 'test' / 'chips').glob(f'*.{chip_format}')))}")
+
+    n_test_chips = len(list((output_dir / 'test' / 'chips').glob(f'*.{chip_format}')))
+    n_test_chips_nominearea = len(list((output_dir / 'test' / 'chips').glob(f'*_nominearea.{chip_format}')))
+    print(f"Nr. Test chips: {n_test_chips}")
+    print(f".   of which without mining area: {n_test_chips_nominearea}")
+    print(f".   of which with mining area: {n_test_chips - n_test_chips_nominearea}")
 
 if __name__ == "__main__":
     main()
