@@ -218,7 +218,7 @@ def main():
     parser.add_argument("chip_format", help="Format to save the chips. Either 'npy' or 'tif'")
     parser.add_argument("--must_contain_mining", action="store_true", help="Flag to indicate if chips must contain some mining area")
     parser.add_argument("--normalize", action="store_true", help="Flag to indicate if chips must be normalized. Can only be true with tif format")
-
+    parser.add_argument("--split", default="all", help="Specify which split to persist. Options: 'all', 'train', 'val', 'test'")
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
@@ -227,6 +227,7 @@ def main():
     chip_format = args.chip_format
     must_contain_mining = args.must_contain_mining
     normalize = args.normalize
+    split = args.split
 
     if chip_format not in ["npy", "tif"]:
         raise ValueError("Invalid chip format. Use 'npy' or 'tif'.")
@@ -244,35 +245,52 @@ def main():
     # check if chips already exist and remove them
     if output_dir.exists():
         print(f"Removing existing chips in {output_dir}")
-        os.system(f"rm -r {output_dir}")
+        if split == "train" or split == "all":
+            os.system(f"rm -r {output_dir / 'train'}")
+        if split == "val" or split == "all":
+            os.system(f"rm -r {output_dir / 'val'}")
+        if split == "test" or split == "all":
+            os.system(f"rm -r {output_dir / 'test'}")
     
-    process_files(train_image_paths, output_dir / "train/chips", chip_size, chip_format)
-    process_files(val_image_paths, output_dir / "val/chips", chip_size, chip_format)
-    process_files(test_image_paths, output_dir / "test/chips", chip_size, chip_format)
-    process_files(train_label_paths, output_dir / "train/labels", chip_size, chip_format)
-    process_files(val_label_paths, output_dir / "val/labels", chip_size, chip_format)
-    process_files(test_label_paths, output_dir / "test/labels", chip_size, chip_format)
+    if split == "train" or split == "all":
+        process_files(train_image_paths, output_dir / "train/chips", chip_size, chip_format)
+        process_files(train_label_paths, output_dir / "train/labels", chip_size, chip_format)
+    if split == "val" or split == "all":
+        process_files(val_image_paths, output_dir / "val/chips", chip_size, chip_format)
+        process_files(val_label_paths, output_dir / "val/labels", chip_size, chip_format)
+    if split == "test" or split == "all":
+        process_files(test_image_paths, output_dir / "test/chips", chip_size, chip_format)
+        process_files(test_label_paths, output_dir / "test/labels", chip_size, chip_format)
 
     if must_contain_mining:
         print("Purging chips that do not contain mining area")
-        purge_chips(output_dir / "train/chips", output_dir / "train/labels", chip_format)
-        purge_chips(output_dir / "val/chips", output_dir / "val/labels", chip_format)
-        purge_chips(output_dir / "test/chips", output_dir / "test/labels", chip_format, testset_mode=True)
+        if split == "train" or split == "all":
+            purge_chips(output_dir / "train/chips", output_dir / "train/labels", chip_format)
+        if split == "val" or split == "all":
+            purge_chips(output_dir / "val/chips", output_dir / "val/labels", chip_format)
+        if split == "test" or split == "all":
+            purge_chips(output_dir / "test/chips", output_dir / "test/labels", chip_format, testset_mode=True)
     
     # check for nan values in chips
     print("Checking for nan values in chips")
-    check_for_nan_values(output_dir / "train/chips", output_dir / "train/labels", chip_format)
-    check_for_nan_values(output_dir / "val/chips", output_dir / "val/labels", chip_format)
-    check_for_nan_values(output_dir / "test/chips", output_dir / "test/labels", chip_format)   
+    if split == "train" or split == "all":
+        check_for_nan_values(output_dir / "train/chips", output_dir / "train/labels", chip_format)
+    if split == "val" or split == "all":
+        check_for_nan_values(output_dir / "val/chips", output_dir / "val/labels", chip_format)
+    if split == "test" or split == "all":
+        check_for_nan_values(output_dir / "test/chips", output_dir / "test/labels", chip_format)
 
     if normalize and chip_format == "tif":
         print("Normalizing chips")
-        for chip_path in (output_dir / "train" / "chips").glob(f"*.{chip_format}"):
-            normalize_geotiff(chip_path, chip_path)
-        for chip_path in (output_dir / "val" / "chips").glob(f"*.{chip_format}"):
-            normalize_geotiff(chip_path, chip_path)
-        for chip_path in (output_dir / "test" / "chips").glob(f"*.{chip_format}"):
-            normalize_geotiff(chip_path, chip_path)
+        if split == "train" or split == "all":
+            for chip_path in (output_dir / "train" / "chips").glob(f"*.{chip_format}"):
+                normalize_geotiff(chip_path, chip_path)
+        if split == "val" or split == "all":
+            for chip_path in (output_dir / "val" / "chips").glob(f"*.{chip_format}"):
+                normalize_geotiff(chip_path, chip_path)
+        if split == "test" or split == "all":
+            for chip_path in (output_dir / "test" / "chips").glob(f"*.{chip_format}"):
+                normalize_geotiff(chip_path, chip_path)
 
     print(f"Chips saved to {output_dir}")
     print(f"Nr. Train chips: {len(list((output_dir / 'train' / 'chips').glob(f'*.{chip_format}')))}")
