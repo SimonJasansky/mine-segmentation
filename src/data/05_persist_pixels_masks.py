@@ -3,7 +3,7 @@ r"""
 Example:
 
 ```bash
-python src/data/persist_pixels_masks.py data/processed/files preferred_polygons --limit 25
+python src/data/05_persist_pixels_masks.py data/processed/files preferred_polygons --limit 25 --split test
 ```
 
 """
@@ -119,15 +119,19 @@ def clean_directory(directory: str, tiles: pd.DataFrame, split: str) -> None:
             i += 1
 
     print(f"Removed {i} files from {directory}")
+
+
 if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("output_path", type=str, help="Path to save the output images")
     parser.add_argument("polygon_layer", type=str, help="Name of the polygon layer in the dataset")
     parser.add_argument("--limit", type=int, help="Limit the number of rows to process")
+    parser.add_argument("--split", default="all", help="Specify which split to persist. Options: 'all', 'train', 'val', 'test'")
     args = parser.parse_args()
     output_path = args.output_path
     polygon_layer = args.polygon_layer
+    split = args.split
     limit = args.limit
 
     # Load the dataset
@@ -135,8 +139,12 @@ if __name__ == "__main__":
     tiles = gpd.read_file(DATASET_PROCESSED, layer="tiles")
     masks = gpd.read_file(DATASET_PROCESSED, layer=polygon_layer)
 
-    # filter the tiles 
-    tiles = tiles[tiles.split.isin(["train", "val", "test"])]
+    # filter the tiles
+    if split == "all":
+        tiles = tiles[tiles.split.isin(["train", "val", "test"])]
+    else:
+        tiles = tiles[tiles.split == split]
+
     masks = masks[masks.tile_id.isin(tiles.tile_id)]
 
     print(f"{len(tiles)} tiles, {len(masks)} masks available. ")

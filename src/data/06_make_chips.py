@@ -6,11 +6,11 @@ This script processes GeoTIFF files from the custom dataset to create
 image chips for segmentation tasks.
 
     Run the script as follows:
-    python preprocess_data.py <data_dir> <output_dir> <chip_size> <chip_format> [<must_contain_mining>] [<normalize>] 
+    python preprocess_data.py <data_dir> <output_dir> <chip_size> <chip_format> [<must_contain_mining>] [<normalize>] [--split <split>]
 
     Examples:
-    python src/data/make_chips.py data/processed/files data/processed/npy/chips 512 npy
-    python src/data/make_chips.py data/processed/files data/processed/tif/chips 1024 tif --must_contain_mining --normalize
+    python src/data/06_make_chips.py data/processed/files data/processed/npy/chips 512 npy --split train
+    python src/data/06_make_chips.py data/processed/files data/processed/tif/chips 1024 tif --must_contain_mining --normalize --split val
 """
 
 
