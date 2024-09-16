@@ -19,10 +19,11 @@ import argparse
 import warnings; warnings.filterwarnings('ignore', 'GeoSeries.notna', UserWarning)
 from tqdm import tqdm
 import networkx as nx
+from sklearn.utils import resample
 
 DATASET_PROCESSED = "data/processed/mining_tiles_with_masks_and_bounding_boxes.gpkg"
 
-def split_data(tiles, val_ratio=0.2, test_ratio=0.1):
+def split_data(tiles, val_ratio=0.15, test_ratio=0.1):
     """
     Split the data into train, validation, and test sets based on the overlap of the polygons.
 
@@ -34,35 +35,64 @@ def split_data(tiles, val_ratio=0.2, test_ratio=0.1):
     Returns:
         GeoDataFrame: The input data with an additional column 'split' that contains the split type.
     """
+    np.random.seed(1234)  # Set the seed for reproducibility
     print("Splitting valid surface tiles into train, validation, and test sets...")
     
-    np.random.seed(1234)  # Set the seed for reproducibility
-    
+    # calculate the number of test tiles
     n_test = int(len(tiles) * test_ratio)
 
     # for each tile, check with how many other tiles it overlaps
+    tiles = tiles.copy()
     tiles["overlaps"] = tiles["geometry"].apply(lambda x: tiles["geometry"].apply(lambda y: x.overlaps(y)).sum())
 
     if len(tiles[tiles["overlaps"] == 0]) < n_test:
         raise ValueError(f"Number of tiles that do not overlap with any other tiles, and that have both maus and tang polygons ({len(tiles[tiles['overlaps'] == 0])}) is less than the number of test tiles ({n_test}).")
 
+    # add a column that combines the minetype1, minetype2, and source_dataset columns, that can be used for stratification
+    strat_cols = ["minetype1", "minetype2", "preferred_dataset"]
+    tiles['stratify_col'] = tiles[strat_cols].apply(lambda row: '_'.join(row.values.astype(str)), axis=1)
+
     # assign the test split directly only to tiles that overlap with no other tiles    
     test_tiles = tiles[tiles["overlaps"] == 0]
     print(f"{len(test_tiles)} tiles do not overlap with any other tiles.")
 
-    # and that have both maus and tang polygons (for validation purposes)
-    test_tiles = test_tiles[test_tiles["source_dataset"] == "both"]
-    print(f"{len(test_tiles)} tiles do not overlap with any other tiles and have both maus and tang polygons.")
+    # # and that have both maus and tang polygons (for validation purposes)
+    # test_tiles = test_tiles[test_tiles["source_dataset"] == "both"]
+    # print(f"{len(test_tiles)} tiles do not overlap with any other tiles and have both maus and tang polygons.")
 
-    # take a random sample of n_test tiles
-    n_test_tiles = len(test_tiles)
-    test_tiles = test_tiles.sample(n_test)
+    # take a stratified sample
+    strat_dist = tiles['stratify_col'].value_counts(normalize=True)
 
-    test_tiles["split"] = "test"
-    print(f"Out of {n_test_tiles} tiles that do not overlap with any other tiles and that have both maus and tang polygons, {len(test_tiles)} are assigned to the test set.")
-    
-    # remove the test tiles from the dataset
-    tiles = tiles.drop(test_tiles.index)
+    test_tiles_sample = pd.DataFrame()
+
+    for strat_value, proportion in strat_dist.items():
+        # print(f"Stratified sample for {strat_value}: {proportion} proportion")
+        strat_sample = test_tiles[test_tiles['stratify_col'] == strat_value]
+        n_samples = int(proportion * n_test)  # Number of samples to draw
+        # print(f"Stratified sample for {strat_value}: {n_samples} samples")
+        # print(f"length of strat_sample: {len(strat_sample)}")
+        if n_samples > 0:
+            # if possible, take tiles where both maus and tang polygons are available
+            if len(strat_sample[strat_sample["source_dataset"] == "both"]) >= n_samples:
+                strat_sample = strat_sample[strat_sample["source_dataset"] == "both"]
+
+            if len(strat_sample) < n_samples:
+                print(f"Stratified sample for {strat_value}: {len(strat_sample)} samples is less than the required number of samples {n_samples}.")
+                print(f"Taking all the available samples for {strat_value} ({len(strat_sample)} samples).")
+                test_tiles_sample = pd.concat([test_tiles_sample, strat_sample])
+            else:
+                strat_sample = strat_sample.sample(n=n_samples)
+                test_tiles_sample = pd.concat([test_tiles_sample, strat_sample])
+
+    # remove the test tiles from the remaining dataset, used for validation and training
+    tiles = tiles.drop(test_tiles_sample.index)
+
+    # reset index
+    test_tiles_sample = test_tiles_sample.reset_index(drop=True)
+
+    # assign the split to the test tiles
+    test_tiles_sample["split"] = "test"
+    print(f"Out of {len(test_tiles)} tiles that do not overlap with any other tiles and that have both maus and tang polygons, {len(test_tiles_sample)} are assigned to the test set.")
 
     print(f"Creating graph for {len(tiles)} tiles...")
 
@@ -103,9 +133,9 @@ def split_data(tiles, val_ratio=0.2, test_ratio=0.1):
     tiles.loc[tiles['overlap_group'].isin(val_groups), 'split'] = 'val'
 
     # combine the test and validation dataframes
-    tiles = pd.concat([tiles, test_tiles])
+    tiles = pd.concat([tiles, test_tiles_sample])
 
-    return tiles.drop(columns=["overlaps", "overlap_group"])
+    return tiles.drop(columns=["overlaps", "overlap_group", "stratify_col"])
 
 
 if __name__ == '__main__':
@@ -127,13 +157,18 @@ if __name__ == '__main__':
 
     tiles_original = gpd.read_file(DATASET_PROCESSED, layer="tiles")
     tiles_original["tile_id"] = tiles_original["tile_id"].astype(int)
-    # masks = gpd.read_file(DATASET_PROCESSED, layer=polygon_layer)
+
+    # if the split column already exists, remove it
+    if "split" in tiles_original.columns:
+        tiles_original = tiles_original.drop(columns=["split"])
 
     if only_valid_surface_mines:
         len_before = len(tiles_original)
         tiles = tiles_original[(tiles_original["source_dataset"] != "rejected") & (tiles_original["minetype1"].isin(["Surface", "Placer"]))]
         len_after = len(tiles)
         print(f"Filtered out {len_before - len_after} rejected tiles and non-surface mines")
+    else:
+        tiles = tiles_original
 
     # filter the polygons according to the tile_ids in the filtered tiles
     tile_ids = tiles.tile_id.unique()
@@ -159,6 +194,32 @@ if __name__ == '__main__':
     train_tiles = tiles[tiles.split == "train"]
     val_tiles = tiles[tiles.split == "val"]
     test_tiles = tiles[tiles.split == "test"]
-    print(f"Train/Val/Test split: {len(train_tiles)}/{len(val_tiles)}/{len(test_tiles)}")
+    print(f"Train/Val/Test split: {len(train_tiles)}/{len(val_tiles)}/{len(test_tiles)}, in relative terms: {len(train_tiles) / len(tiles):.2f}/{len(val_tiles) / len(tiles):.2f}/{len(test_tiles) / len(tiles):.2f}")
+    print("-" * 80)
+    print("\nCheck the distribution of the stratified test set:\n")
 
-    print(f"Saved filtered dataset, containinig {len(tiles)} valid records, to {DATASET_PROCESSED}")
+    # check if the stratified test set has the same distribution as the original dataset
+    print("Distribution of Stratified Test Set:")
+    print(test_tiles.groupby(["minetype1", "minetype2", "preferred_dataset"]).size() / len(test_tiles) * 100)
+    print("\nDistribution of Original Dataset:")
+    print(tiles.groupby(["minetype1", "minetype2", "preferred_dataset"]).size() / len(tiles) * 100)
+
+    # check for the single variables
+    print("\nDistribution of minetype1 in Stratified Test Set:")
+    print(test_tiles["minetype1"].value_counts(normalize=True) * 100)
+    print("\nDistribution of minetype1 in Original Dataset:")
+    print(tiles["minetype1"].value_counts(normalize=True) * 100)
+
+    print("\nDistribution of minetype2 in Stratified Test Set:")
+    print(test_tiles["minetype2"].value_counts(normalize=True) * 100)
+    print("\nDistribution of minetype2 in Original Dataset:")
+    print(tiles["minetype2"].value_counts(normalize=True) * 100)
+
+    print("\nDistribution of preferred_dataset in Stratified Test Set:")
+    print(test_tiles["preferred_dataset"].value_counts(normalize=True) * 100)
+    print("\nDistribution of preferred_dataset in Original Dataset:")
+    print(tiles["preferred_dataset"].value_counts(normalize=True) * 100)
+
+    print(f"Saved dataset with the train/val/test split column, containinig {len(tiles)} valid records, to {DATASET_PROCESSED}")
+
+
