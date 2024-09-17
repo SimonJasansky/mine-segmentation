@@ -1,19 +1,19 @@
 # lightning.pytorch==2.1.2
 seed_everything: 42
 data:
-  train_chip_dir: data/processed/chips/npy/1024/train/chips/
-  train_label_dir: data/processed/chips/npy/1024/train/labels/
-  val_chip_dir: data/processed/chips/npy/1024/val/chips/
-  val_label_dir: data/processed/chips/npy/1024/val/labels/
+  train_chip_dir: data/processed/chips/npy/512/train/chips/
+  train_label_dir: data/processed/chips/npy/512/train/labels/
+  val_chip_dir: data/processed/chips/npy/512/val/chips/
+  val_label_dir: data/processed/chips/npy/512/val/labels/
   metadata_path: configs/cnn/cnn_segment_metadata.yaml
-  batch_size: 12
+  batch_size: 16
   num_workers: 16 # Set to number of CPU cores
   platform: sentinel-2-l2a
   data_augmentation: True
-  chip_size: 1024
+  chip_size: 512
 model:
   arch: unet
-  encoder_name: resnet34
+  encoder_name: efficientnet-b5
   encoder_weights: imagenet
   in_channels: 3
   num_classes: 1
@@ -27,7 +27,7 @@ trainer:
   devices: auto
   num_nodes: 1
   precision: 16-mixed
-  log_every_n_steps: 1
+  log_every_n_steps: 2
   max_epochs: 18
   accumulate_grad_batches: 1
   default_root_dir: src/models/cnn
@@ -44,11 +44,11 @@ trainer:
       init_args:
         dirpath: models/cnn
         auto_insert_metric_name: False
-        filename: mineseg-cnn_epoch-{epoch:02d}_val-iou-{val/iou:.4f}
+        filename: mineseg-cnn_{chip_size}_epoch-{epoch:02d}_val-iou-{val/iou:.4f}
         monitor: val/iou
         mode: max
         save_last: True
-        save_top_k: 2
+        save_top_k: 1
         save_weights_only: True
         verbose: True
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor

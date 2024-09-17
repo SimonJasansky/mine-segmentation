@@ -7,7 +7,7 @@ import segmentation_models_pytorch as smp
 import torch
 import torch.nn.functional as F
 from torch import optim
-from torchmetrics.classification import BinaryF1Score, BinaryJaccardIndex
+from torchmetrics.classification import BinaryF1Score, BinaryJaccardIndex, BinaryAccuracy, BinaryPrecision, BinaryRecall
 
 class MineSegmentorCNN(L.LightningModule):
     """
@@ -48,6 +48,10 @@ class MineSegmentorCNN(L.LightningModule):
         self.loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
         self.iou = BinaryJaccardIndex() # aka Jaccard
         self.f1 = BinaryF1Score() # aka Dice 
+        self.accuracy = BinaryAccuracy()
+        self.precision = BinaryPrecision()
+        self.recall = BinaryRecall()
+
 
     def forward(self, image):
         """
@@ -103,7 +107,7 @@ class MineSegmentorCNN(L.LightningModule):
 
         Args:
             batch (dict): A dictionary containing the batch data.
-            phase (str): The phase (train or val).
+            phase (str): The phase (train, val or test).
 
         Returns:
             torch.Tensor: The loss value.
@@ -128,11 +132,16 @@ class MineSegmentorCNN(L.LightningModule):
         iou = self.iou(pred_mask, labels)
         f1 = self.f1(pred_mask, labels)
 
+        if phase == "train":
+            log_step = True
+        else:
+            log_step = False
+
         # Log metrics
         self.log(
             f"{phase}/loss",
             loss,
-            on_step=True,
+            on_step=log_step,
             on_epoch=True,
             prog_bar=True,
             logger=True,
@@ -141,7 +150,7 @@ class MineSegmentorCNN(L.LightningModule):
         self.log(
             f"{phase}/iou",
             iou,
-            on_step=True,
+            on_step=log_step,
             on_epoch=True,
             prog_bar=True,
             logger=True,
@@ -150,7 +159,34 @@ class MineSegmentorCNN(L.LightningModule):
         self.log(
             f"{phase}/f1",
             f1,
-            on_step=True,
+            on_step=log_step,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{phase}/accuracy",
+            self.accuracy(pred_mask, labels),
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{phase}/precision",
+            self.precision(pred_mask, labels),
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{phase}/recall",
+            self.recall(pred_mask, labels),
+            on_step=False,
             on_epoch=True,
             prog_bar=True,
             logger=True,
@@ -183,3 +219,16 @@ class MineSegmentorCNN(L.LightningModule):
             torch.Tensor: The loss value.
         """
         return self.shared_step(batch, batch_idx, "val")
+    
+    def test_step(self, batch, batch_idx):
+        """
+        Test step for the model.
+
+        Args:
+            batch (dict): A dictionary containing the batch data.
+            batch_idx (int): The index of the batch.
+
+        Returns:
+            torch.Tensor: The loss value.
+        """
+        return self.shared_step(batch, batch_idx, "test")

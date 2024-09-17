@@ -11,16 +11,15 @@ References:
 """
 
 import torch
-# import yaml
-
-# Set matmul precision
-if torch.cuda.is_available():
-    torch.set_float32_matmul_precision('medium')  # or 'high'
-
+import yaml
 from lightning.pytorch.cli import LightningCLI
 
 from src.models.datamodule import MineDataModule
 from src.models.cnn.model import MineSegmentorCNN
+
+# Set matmul precision
+if torch.cuda.is_available():
+    torch.set_float32_matmul_precision('medium')  # or 'high'
 
 # %%
 def cli_main():
@@ -30,7 +29,7 @@ def cli_main():
     cli = LightningCLI(MineSegmentorCNN, MineDataModule, save_config_kwargs={"overwrite": True})
 
     # Print the configuration
-    # print(yaml.dump(cli.config))
+    print(yaml.dump(cli.config))
 
     return cli
 
