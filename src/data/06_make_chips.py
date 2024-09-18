@@ -9,8 +9,8 @@ image chips for segmentation tasks.
     python preprocess_data.py <data_dir> <output_dir> <chip_size> <chip_format> [<must_contain_mining>] [<normalize>] [--split <split>]
 
     Examples:
-    python src/data/06_make_chips.py data/processed/files data/processed/npy/chips 512 npy --split train
-    python src/data/06_make_chips.py data/processed/files data/processed/tif/chips 1024 tif --must_contain_mining --normalize --split val
+    python src/data/06_make_chips.py data/processed/files data/processed/chips/npy/512 512 npy --split train
+    python src/data/06_make_chips.py data/processed/files data/processed/chips/tif/1024 1024 tif --must_contain_mining --normalize --split val
 """
 
 
@@ -209,6 +209,12 @@ def main():
         - chip_size: Size of the square chips.
         - chip_format: Format to save the chips. Either 'npy' or 'tif'.
         - must_contain_mining: Flag to indicate if chips must contain some mining area.
+        - normalize: Flag to indicate if chips must be normalized. Can only be true with tif format.
+        - split: Specify which split to persist. Options: 'all', 'train', 'val', 'test'
+
+    Examples:
+    python src/data/06_make_chips.py data/processed/files data/processed/npy/chips 512 npy --split train
+    python src/data/06_make_chips.py data/processed/files data/processed/tif/chips 1024 tif --must_contain_mining --normalize --split val
     """
 
     parser = argparse.ArgumentParser(description="Data Processing Script")
@@ -272,13 +278,14 @@ def main():
             purge_chips(output_dir / "test/chips", output_dir / "test/labels", chip_format, testset_mode=True)
     
     # check for nan values in chips
-    print("Checking for nan values in chips")
-    if split == "train" or split == "all":
-        check_for_nan_values(output_dir / "train/chips", output_dir / "train/labels", chip_format)
-    if split == "val" or split == "all":
-        check_for_nan_values(output_dir / "val/chips", output_dir / "val/labels", chip_format)
-    if split == "test" or split == "all":
-        check_for_nan_values(output_dir / "test/chips", output_dir / "test/labels", chip_format)
+    if chip_format == "npy":
+        print("Checking for nan values in chips")
+        if split == "train" or split == "all":
+            check_for_nan_values(output_dir / "train/chips", output_dir / "train/labels", chip_format)
+        if split == "val" or split == "all":
+            check_for_nan_values(output_dir / "val/chips", output_dir / "val/labels", chip_format)
+        if split == "test" or split == "all":
+            check_for_nan_values(output_dir / "test/chips", output_dir / "test/labels", chip_format)
 
     if normalize and chip_format == "tif":
         print("Normalizing chips")
