@@ -143,7 +143,7 @@ class MineDataModule(L.LightningDataModule):
         num_workers,
         platform,
         data_augmentation,
-        chip_size,
+        # chip_size,
     ):
         super().__init__()
         self.train_chip_dir = train_chip_dir
@@ -157,7 +157,7 @@ class MineDataModule(L.LightningDataModule):
         self.num_workers = num_workers
         self.platform = platform
         self.data_augmentation = data_augmentation
-        self.chip_size = chip_size
+        # self.chip_size = chip_size
         # print("Batch size: ", self.batch_size)
         # print("Data augmentation: ", self.data_augmentation)
 
