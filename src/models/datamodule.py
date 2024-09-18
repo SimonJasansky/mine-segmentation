@@ -58,9 +58,11 @@ class MineDataset(Dataset):
         """
         image_transform = v2.Normalize(mean=mean, std=std)
 
+        # according to https://github.com/pytorch/vision/issues/566
         flip_transform = v2.Compose([
             v2.RandomHorizontalFlip(p=0.5),
             v2.RandomVerticalFlip(p=0.5),
+            v2.RandomApply([v2.RandomRotation((90, 90))], p=0.5),
             # v2.RandomResizedCrop(size=512, scale=(0.9, 1.0)),
         ]) if self.data_augmentation else None
 
