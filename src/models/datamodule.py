@@ -58,9 +58,11 @@ class MineDataset(Dataset):
         """
         image_transform = v2.Normalize(mean=mean, std=std)
 
+        # according to https://github.com/pytorch/vision/issues/566
         flip_transform = v2.Compose([
             v2.RandomHorizontalFlip(p=0.5),
             v2.RandomVerticalFlip(p=0.5),
+            v2.RandomApply([v2.RandomRotation((90, 90))], p=0.5),
             # v2.RandomResizedCrop(size=512, scale=(0.9, 1.0)),
         ]) if self.data_augmentation else None
 
@@ -143,7 +145,7 @@ class MineDataModule(L.LightningDataModule):
         num_workers,
         platform,
         data_augmentation,
-        chip_size,
+        # chip_size,
     ):
         super().__init__()
         self.train_chip_dir = train_chip_dir
@@ -157,7 +159,7 @@ class MineDataModule(L.LightningDataModule):
         self.num_workers = num_workers
         self.platform = platform
         self.data_augmentation = data_augmentation
-        self.chip_size = chip_size
+        # self.chip_size = chip_size
         # print("Batch size: ", self.batch_size)
         # print("Data augmentation: ", self.data_augmentation)
 
