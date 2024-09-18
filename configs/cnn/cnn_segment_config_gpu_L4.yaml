@@ -10,10 +10,9 @@ data:
   num_workers: 16 # Set to number of CPU cores
   platform: sentinel-2-l2a
   data_augmentation: True
-  chip_size: 512
 model:
   arch: unet
-  encoder_name: efficientnet-b5
+  encoder_name: resnet34
   encoder_weights: imagenet
   in_channels: 3
   num_classes: 1
@@ -44,7 +43,7 @@ trainer:
       init_args:
         dirpath: models/cnn
         auto_insert_metric_name: False
-        filename: mineseg-cnn_{chip_size}_epoch-{epoch:02d}_val-iou-{val/iou:.4f}
+        filename: mineseg-cnn_epoch-{epoch:02d}_val-iou-{val/iou:.4f}
         monitor: val/iou
         mode: max
         save_last: True

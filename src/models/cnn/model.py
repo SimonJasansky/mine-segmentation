@@ -9,9 +9,9 @@ import torch.nn.functional as F
 from torch import optim
 from torchmetrics.classification import BinaryF1Score, BinaryJaccardIndex, BinaryAccuracy, BinaryPrecision, BinaryRecall
 
-def jaccard_pow_loss(y_true, y_pred, p_value=1.5, smooth=10, from_logits=True, eps=1e-7):
+def jaccard_pow_loss(y_pred, y_true, p_value=1.5, smooth=10, from_logits=True):
     if from_logits:
-        y_pred = torch.sigmoid(y_pred)
+        y_pred = F.logsigmoid(y_pred.float()).exp()
     y_true_f = y_true.view(-1)
     y_pred_f = y_pred.view(-1)
 
@@ -19,20 +19,18 @@ def jaccard_pow_loss(y_true, y_pred, p_value=1.5, smooth=10, from_logits=True, e
     term_true = torch.sum(y_true_f.pow(p_value))
     term_pred = torch.sum(y_pred_f.pow(p_value))
     union = term_true + term_pred - intersection
-    return 1 - ((intersection + smooth) / (union + smooth + eps))
+    return 1 - ((intersection + smooth) / (union + smooth))
 
-def dice_pow_loss(y_true, y_pred, p_value=1.5, smooth=10, from_logits=True):
+def dice_pow_loss(y_pred, y_true, p_value=1.5, smooth=10, from_logits=True):
     if from_logits:
         y_pred = F.logsigmoid(y_pred.float()).exp()
     y_true_f = y_true.view(-1)
     y_pred_f = y_pred.view(-1)
-    # print(y_true_f.shape, y_pred_f.shape)
 
     numerator = torch.sum(2 * (y_true_f * y_pred_f))
     y_true_f = y_true_f.pow(p_value)
     y_pred_f = y_pred_f.pow(p_value)
     denominator = torch.sum(y_true_f) + torch.sum(y_pred_f)
-    # print(numerator, denominator)
     return 1 - ((numerator + smooth) / (denominator + smooth ))
 
 class MineSegmentorCNN(L.LightningModule):
@@ -71,10 +69,13 @@ class MineSegmentorCNN(L.LightningModule):
             classes=num_classes,
             **kwargs
         )
+
         # define loss function
         # self.loss_fn = smp.losses.FocalLoss(smp.losses.BINARY_MODE)
         # self.loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
-        self.loss_fn = smp.losses.JaccardLoss(smp.losses.BINARY_MODE, from_logits=True)
+        # self.loss_fn = smp.losses.JaccardLoss(smp.losses.BINARY_MODE, from_logits=True)
+        self.loss_fn = smp.losses.SoftBCEWithLogitsLoss()
+        # self.loss_fn = smp.losses.MCCLoss()
         # self.loss_fn = dice_pow_loss
         # self.loss_fn = jaccard_pow_loss
 
@@ -154,7 +155,7 @@ class MineSegmentorCNN(L.LightningModule):
         # expand the first dimension of the labels
         labels = labels.unsqueeze(1)
 
-        loss = self.loss_fn(logits_mask, labels)
+        loss = self.loss_fn(logits_mask, labels.float())
 
         # Lets compute metrics for some threshold
         # first convert mask values to probabilities, then

@@ -105,7 +105,7 @@ python src/data/03_postprocess_dataset.py
 python src/data/04_filter_and_split_dataset.py preferred_polygons --val_ratio 0.15 --test_ratio 0.10 --only_valid_surface_mines
 
 # download S2 images & create masks
-python src/data/05_persist_pixels_masks.py data/processed/files preferred_polygons --limit 25 --split all
+python src/data/05_persist_pixels_masks.py data/processed/files preferred_polygons --split all
 
 # chip images
 python src/data/06_make_chips.py data/processed/files data/processed/chips/npy/512 512 npy --must_contain_mining --split all
