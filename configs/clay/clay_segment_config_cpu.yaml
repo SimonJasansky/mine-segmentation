@@ -1,10 +1,10 @@
 # lightning.pytorch==2.1.2
 seed_everything: 42
 data:
-  train_chip_dir: data/processed/chips/npy/train/chips/
-  train_label_dir: data/processed/chips/npy/train/labels/
-  val_chip_dir: data/processed/chips/npy/val/chips/
-  val_label_dir: data/processed/chips/npy/val/labels/
+  train_chip_dir: data/processed/chips/npy/512/train/chips/
+  train_label_dir: data/processed/chips/npy/512/train/labels/
+  val_chip_dir: data/processed/chips/npy/512/val/chips/
+  val_label_dir: data/processed/chips/npy/512/val/labels/
   metadata_path: configs/clay/clay_segment_metadata.yaml
   batch_size: 1
   num_workers: 4 # Set to number of CPU cores
