@@ -8,9 +8,10 @@ import segmentation_models_pytorch as smp
 import torch
 import torch.nn.functional as F
 from torch import optim
-from torchmetrics.classification import BinaryF1Score, BinaryJaccardIndex
+from torchmetrics.classification import BinaryF1Score, BinaryJaccardIndex, BinaryAccuracy, BinaryPrecision, BinaryRecall
 
 from src.models.clay.segment.factory import Segmentor
+from src.models.utils import jaccard_pow_loss, dice_pow_loss
 
 # Ugly workaround to define the desired width and height of the images
 FILLER = 512
@@ -45,9 +46,13 @@ class MineSegmentor(L.LightningModule):
             ckpt_path=ckpt_path,
         )
 
-        self.loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
+        # self.loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True) 
+        self.loss_fn = jaccard_pow_loss
         self.iou = BinaryJaccardIndex()
         self.f1 = BinaryF1Score()
+        self.accuracy = BinaryAccuracy()
+        self.precision = BinaryPrecision()
+        self.recall = BinaryRecall()
 
     def forward(self, datacube):
         """
@@ -129,17 +134,26 @@ class MineSegmentor(L.LightningModule):
         )  # Resize to match labels size
 
         # Remove the channel dimension if it's 1 (in the masks for binary segmentation)
-        outputs = outputs.squeeze(1)
+        pred_mask = outputs.squeeze(1)
 
-        loss = self.loss_fn(outputs, labels)
-        iou = self.iou(outputs, labels)
-        f1 = self.f1(outputs, labels)
+        # Threshold the output to get the predicted mask
+        # outputs = outputs.sigmoid()
+        # pred_mask = outputs > 0.5
+
+        loss = self.loss_fn(pred_mask, labels)
+        iou = self.iou(pred_mask, labels)
+        f1 = self.f1(pred_mask, labels)
+
+        if phase == "train":
+            log_step = True
+        else:
+            log_step = False
 
         # Log metrics
         self.log(
             f"{phase}/loss",
             loss,
-            on_step=True,
+            on_step=log_step,
             on_epoch=True,
             prog_bar=True,
             logger=True,
@@ -148,7 +162,7 @@ class MineSegmentor(L.LightningModule):
         self.log(
             f"{phase}/iou",
             iou,
-            on_step=True,
+            on_step=log_step,
             on_epoch=True,
             prog_bar=True,
             logger=True,
@@ -157,7 +171,34 @@ class MineSegmentor(L.LightningModule):
         self.log(
             f"{phase}/f1",
             f1,
-            on_step=True,
+            on_step=log_step,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{phase}/accuracy",
+            self.accuracy(pred_mask, labels),
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{phase}/precision",
+            self.precision(pred_mask, labels),
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{phase}/recall",
+            self.recall(pred_mask, labels),
+            on_step=False,
             on_epoch=True,
             prog_bar=True,
             logger=True,
@@ -190,3 +231,16 @@ class MineSegmentor(L.LightningModule):
             torch.Tensor: The loss value.
         """
         return self.shared_step(batch, batch_idx, "val")
+
+    def test_step(self, batch, batch_idx):
+        """
+        Test step for the model.
+
+        Args:
+            batch (dict): A dictionary containing the batch data.
+            batch_idx (int): The index of the batch.
+
+        Returns:
+            torch.Tensor: The loss value.
+        """
+        return self.shared_step(batch, batch_idx, "test")
