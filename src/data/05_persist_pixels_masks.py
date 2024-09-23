@@ -128,14 +128,18 @@ if __name__ == "__main__":
     parser.add_argument("polygon_layer", type=str, help="Name of the polygon layer in the dataset")
     parser.add_argument("--limit", type=int, help="Limit the number of rows to process")
     parser.add_argument("--split", default="all", help="Specify which split to persist. Options: 'all', 'train', 'val', 'test'")
+    parser.add_argument("--bands", nargs="+", default=["B04", "B03", "B02"], help="List of bands to read from the stack")
     args = parser.parse_args()
     output_path = args.output_path
     polygon_layer = args.polygon_layer
     split = args.split
     limit = args.limit
+    bands = args.bands
 
     # Load the dataset
     print("Processing polygons from polygon layer " + polygon_layer)
+    print("Split: " + split)
+    print("Bands: " + str(bands))
     tiles = gpd.read_file(DATASET_PROCESSED, layer="tiles")
     masks = gpd.read_file(DATASET_PROCESSED, layer=polygon_layer)
 
@@ -184,7 +188,7 @@ if __name__ == "__main__":
         row=row, 
         masks=masks, 
         stac_reader=stac_reader, 
-        bands=["B04", "B03", "B02"],
+        bands=bands,
         output_path=output_path + "/train"
     ), axis=1)
 
@@ -196,7 +200,7 @@ if __name__ == "__main__":
         row=row, 
         masks=masks, 
         stac_reader=stac_reader, 
-        bands=["B04", "B03", "B02"],
+        bands=bands,
         output_path=output_path + "/val"
     ), axis=1)
 
@@ -208,7 +212,7 @@ if __name__ == "__main__":
         row=row, 
         masks=masks, 
         stac_reader=stac_reader, 
-        bands=["B04", "B03", "B02"],
+        bands=bands,
         output_path=output_path + "/test"
     ), axis=1)
 
