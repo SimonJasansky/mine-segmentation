@@ -10,7 +10,6 @@ data:
   num_workers: 4 # Set to number of CPU cores
   platform: sentinel-2-l2a
   data_augmentation: True
-#  chip_size: 512
 model:
   arch: unet
   encoder_name: resnet34

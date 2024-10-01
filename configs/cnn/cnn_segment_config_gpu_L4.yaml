@@ -27,7 +27,7 @@ trainer:
   num_nodes: 1
   precision: 16-mixed
   log_every_n_steps: 2
-  max_epochs: 18
+  max_epochs: 30
   accumulate_grad_batches: 1
   default_root_dir: src/models/cnn
   fast_dev_run: False
@@ -48,10 +48,12 @@ trainer:
         mode: max
         save_last: True
         save_top_k: 1
-        save_weights_only: True
+        save_weights_only: False
         verbose: True
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
       init_args:
         logging_interval: step
   plugins:
     - class_path: lightning.pytorch.plugins.io.AsyncCheckpointIO
+# to resume training from a checkpoint, set the following:
+# ckpt_path: /teamspace/studios/this_studio/workspaces/mine-segmentation/models/cnn/mineseg-cnn_epoch-16_val-iou-0.4488.ckpt
