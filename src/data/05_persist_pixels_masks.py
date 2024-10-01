@@ -27,7 +27,8 @@ def process_row(
         masks: pd.DataFrame, 
         stac_reader: ReadSTAC, 
         bands: List[str], 
-        output_path: str
+        output_path: str,
+        mask_only: bool = False
     ) -> None:
     """
     Process a row of data by retrieving the corresponding item from a STAC catalog,
@@ -51,43 +52,70 @@ def process_row(
     img_path = output_path + f"/{tile_id}_{row.s2_tile_id}_img.tif"
     mask_path = output_path + f"/{tile_id}_{row.s2_tile_id}_mask.tif"
 
-    # check if the image already exists
-    if os.path.exists(img_path) and os.path.exists(mask_path):
-        print(f"Image and mask already exist for tile {row.tile_id}")
-        return
-    elif os.path.exists(img_path) and not os.path.exists(mask_path):
-        raise FileNotFoundError(f"Image exists but mask does not for tile {row.tile_id}")
-    elif not os.path.exists(img_path) and os.path.exists(mask_path):
-        raise FileNotFoundError(f"Mask exists but image does not for tile {row.tile_id}")
-    
-    # check if the mask is empty
-    poly = masks[masks.tile_id == tile_id].geometry.values
-    if (poly is None or len(poly) == 0 or poly[0] is None):
-        print(f"No mask found for tile {tile_id}, skipping image")
-        return
+    img_exists = os.path.exists(img_path)
 
-    item = stac_reader.get_item_by_name(row.s2_tile_id, bbox=bounds)
+    if not mask_only or not img_exists:
+        # check if the image already exists
+        if os.path.exists(img_path) and os.path.exists(mask_path):
+            print(f"Image and mask already exist for tile {row.tile_id}")
+            return
+        elif os.path.exists(img_path) and not os.path.exists(mask_path):
+            raise FileNotFoundError(f"Image exists but mask does not for tile {row.tile_id}")
+        elif not os.path.exists(img_path) and os.path.exists(mask_path):
+            raise FileNotFoundError(f"Mask exists but image does not for tile {row.tile_id}")
+        
+        # check if the mask is empty
+        poly = masks[masks.tile_id == tile_id].geometry.values
+        if (poly is None or len(poly) == 0 or poly[0] is None):
+            print(f"No mask found for tile {tile_id}, skipping image")
+            return
 
-    # read as stack
-    stack = stac_reader.get_stack(
-        items=item, 
-        bands=bands,
-        crop_to_bounds=False, 
-        squeeze_time_dim=True,
-        custom_point_and_buffer=[lon, lat, 10240],
-        chunk_size=512,
-    )
+        item = stac_reader.get_item_by_name(row.s2_tile_id, bbox=bounds)
 
-    # save image
-    stac_reader.save_stack_as_geotiff(stack, img_path)
+        # read as stack
+        stack = stac_reader.get_stack(
+            items=item, 
+            bands=bands,
+            crop_to_bounds=False, 
+            squeeze_time_dim=True,
+            custom_point_and_buffer=[lon, lat, 10240],
+            chunk_size=512,
+        )
 
+        # store crs
+        crs = stack.crs
+        transform = stack.rio.transform()
+
+        # save image
+        stac_reader.save_stack_as_geotiff(stack, img_path)
+
+    else:
+        # check if the mask already exists
+        if os.path.exists(mask_path):
+            # remove the mask
+            os.remove(mask_path)
+
+        # check if the mask is empty
+        poly = masks[masks.tile_id == tile_id].geometry.values
+        if (poly is None or len(poly) == 0 or poly[0] is None):
+            print(f"No mask found for tile {tile_id}, removing image")
+            if os.path.exists(img_path):
+                os.remove(img_path)
+            return
+        
+        # load the image to get crs
+        with rasterio.open(img_path) as src:
+            crs = src.crs
+            transform = src.transform
+            print(f"Loaded image {img_path} to get crs")
+            
     # convert mask to same crs as image
-    poly = poly.to_crs(stack.crs)
-    mask_raster = rasterio.features.rasterize(poly, out_shape=(2048,2048), transform=stack.rio.transform())
+    poly = poly.to_crs(crs)
+    mask_raster = rasterio.features.rasterize(poly, out_shape=(2048,2048), transform=transform)
 
     # save mask
     with rasterio.open(mask_path, 'w', driver='GTiff', 
-                       height=2048, width=2048, count=1, dtype=np.uint8, crs=stack.crs, transform=stack.rio.transform()) as dst:
+                       height=2048, width=2048, count=1, dtype=np.uint8, crs=crs, transform=transform) as dst:
         dst.write(mask_raster, 1)
 
 
@@ -129,17 +157,20 @@ if __name__ == "__main__":
     parser.add_argument("--limit", type=int, help="Limit the number of rows to process")
     parser.add_argument("--split", default="all", help="Specify which split to persist. Options: 'all', 'train', 'val', 'test'")
     parser.add_argument("--bands", nargs="+", default=["B04", "B03", "B02"], help="List of bands to read from the stack")
+    parser.add_argument("--masks_only", action='store_true', help="Only persist the masks")
     args = parser.parse_args()
     output_path = args.output_path
     polygon_layer = args.polygon_layer
     split = args.split
     limit = args.limit
     bands = args.bands
+    masks_only = args.masks_only
 
     # Load the dataset
     print("Processing polygons from polygon layer " + polygon_layer)
     print("Split: " + split)
     print("Bands: " + str(bands))
+    print("Mask only: " + str(masks_only))
     tiles = gpd.read_file(DATASET_PROCESSED, layer="tiles")
     masks = gpd.read_file(DATASET_PROCESSED, layer=polygon_layer)
 
@@ -189,7 +220,8 @@ if __name__ == "__main__":
         masks=masks, 
         stac_reader=stac_reader, 
         bands=bands,
-        output_path=output_path + "/train"
+        output_path=output_path + "/train",
+        mask_only=masks_only
     ), axis=1)
 
     # Print the number of rows processed for train set
@@ -201,7 +233,8 @@ if __name__ == "__main__":
         masks=masks, 
         stac_reader=stac_reader, 
         bands=bands,
-        output_path=output_path + "/val"
+        output_path=output_path + "/val",
+        mask_only=masks_only
     ), axis=1)
 
     # Print the number of rows processed for val set
@@ -213,12 +246,12 @@ if __name__ == "__main__":
         masks=masks, 
         stac_reader=stac_reader, 
         bands=bands,
-        output_path=output_path + "/test"
+        output_path=output_path + "/test",
+        mask_only=masks_only
     ), axis=1)
 
     # Print the number of rows processed for val set
     print(f"Processed {len(test_tiles)} rows for test set")
-
     print("Checking for duplicates and removing them if necessary...")
 
     train_files = os.listdir(output_path + "/train/")
