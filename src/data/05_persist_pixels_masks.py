@@ -190,9 +190,16 @@ if __name__ == "__main__":
     os.makedirs(output_path + "/test", exist_ok=True)
 
     # clean the directories
-    clean_directory(output_path + "/train", tiles, "train")
-    clean_directory(output_path + "/val", tiles, "val")
-    clean_directory(output_path + "/test", tiles, "test")
+    if split == "all":
+        clean_directory(output_path + "/train", tiles, "train")
+        clean_directory(output_path + "/val", tiles, "val")
+        clean_directory(output_path + "/test", tiles, "test")
+    elif split == "train":
+        clean_directory(output_path + "/train", tiles, "train")
+    elif split == "val":
+        clean_directory(output_path + "/val", tiles, "val")
+    elif split == "test":
+        clean_directory(output_path + "/test", tiles, "test")
 
     # Set the limit to the length of the tiles dataframe if not provided
     if limit is None:
