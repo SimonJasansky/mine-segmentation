@@ -569,3 +569,18 @@ class MineSamGeo:
             fig.savefig(output, **kwargs)
 
         return fig
+    
+    def get_image_labels_preds(self):
+        """
+        Get the image, labels, and predictions
+        """
+        chip_path = self.model.source
+
+        # get mask path
+        mask_path = self.get_mask_path(chip_path)
+
+        # load mask with rasterio
+        with rasterio.open(mask_path) as src:
+            mask = src.read(1)
+
+        return self.model.image, mask, self.model.prediction

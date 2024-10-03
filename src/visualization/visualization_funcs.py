@@ -280,3 +280,29 @@ def plot_pred_vs_true_mask(
         plt.savefig(**kwargs)
     else:
         plt.show()
+
+
+def plot_predictions(images, labels, preds):
+    fig, axes = plt.subplots(1, 4, figsize=(15, 6))
+
+    # Plot the image
+    axes[0].imshow(images)
+    axes[0].axis("off")
+    axes[0].set_title("Image", fontsize=12)
+
+    # Plot the actual segmentation
+    axes[1].imshow(labels, vmin=0, vmax=1)
+    axes[1].axis("off")
+    axes[1].set_title("Actual", fontsize=12)
+
+    # Plot the predicted segmentation
+    axes[2].imshow(preds, vmin=0, vmax=1)
+    axes[2].axis("off")
+    axes[2].set_title("Pred", fontsize=12)
+
+    # Plot the plot_pred_vs_true_mask
+    plot_pred_vs_true_mask(images, labels, preds.squeeze(), ax=axes[3], add_legend=False)
+    axes[3].set_title("Pred vs True", fontsize=12)
+
+    plt.tight_layout()
+    plt.show()
