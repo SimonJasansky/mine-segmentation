@@ -274,8 +274,8 @@ def main():
             purge_chips(output_dir / "train/chips", output_dir / "train/labels", chip_format)
         if split == "val" or split == "all":
             purge_chips(output_dir / "val/chips", output_dir / "val/labels", chip_format)
-        if split == "test" or split == "all":
-            purge_chips(output_dir / "test/chips", output_dir / "test/labels", chip_format, testset_mode=True)
+    if split == "test" or split == "all":
+        purge_chips(output_dir / "test/chips", output_dir / "test/labels", chip_format, testset_mode=True)
     
     # check for nan values in chips
     if chip_format == "npy":
