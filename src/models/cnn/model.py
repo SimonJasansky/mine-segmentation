@@ -53,8 +53,8 @@ class MineSegmentorCNN(L.LightningModule):
         # self.loss_fn = smp.losses.JaccardLoss(smp.losses.BINARY_MODE, from_logits=True)
         # self.loss_fn = smp.losses.SoftBCEWithLogitsLoss()
         # self.loss_fn = smp.losses.MCCLoss()
-        # self.loss_fn = dice_pow_loss
-        self.loss_fn = jaccard_pow_loss
+        self.loss_fn = dice_pow_loss
+        # self.loss_fn = jaccard_pow_loss
 
         # define metrics
         self.iou = BinaryJaccardIndex() # aka Jaccard

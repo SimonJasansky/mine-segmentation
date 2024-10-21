@@ -14,7 +14,7 @@ from src.models.clay.segment.factory import Segmentor
 from src.models.utils import jaccard_pow_loss, dice_pow_loss
 
 # Ugly workaround to define the desired width and height of the images
-FILLER = 512
+FILLER = 256
 
 class MineSegmentor(L.LightningModule):
     """
@@ -65,7 +65,7 @@ class MineSegmentor(L.LightningModule):
         Returns:
             torch.Tensor: The segmentation logits.
         """
-        waves = torch.tensor([0.665, 0.56, 0.493])  # Sentinel wavelengths of B04, B03, B02
+        waves = torch.tensor([0.665, 0.56, 0.493, 0.842])  # Sentinel wavelengths of B04, B03, B02 (B08)
         gsd = torch.tensor(10.0)  # Sentinel GSD
 
         # Forward pass through the network

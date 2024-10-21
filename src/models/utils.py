@@ -1,7 +1,7 @@
 import torch.nn.functional as F
 import torch
 
-def jaccard_pow_loss(y_pred, y_true, p_value=1.5, smooth=10, from_logits=True):
+def jaccard_pow_loss(y_pred, y_true, p_value=1.75, smooth=10, from_logits=True):
     if from_logits:
         y_pred = F.logsigmoid(y_pred.float()).exp()
     y_true_f = y_true.view(-1)
@@ -13,7 +13,7 @@ def jaccard_pow_loss(y_pred, y_true, p_value=1.5, smooth=10, from_logits=True):
     union = term_true + term_pred - intersection
     return 1 - ((intersection + smooth) / (union + smooth))
 
-def dice_pow_loss(y_pred, y_true, p_value=1.5, smooth=10, from_logits=True):
+def dice_pow_loss(y_pred, y_true, p_value=1.75, smooth=10, from_logits=True):
     if from_logits:
         y_pred = F.logsigmoid(y_pred.float()).exp()
     y_true_f = y_true.view(-1)
