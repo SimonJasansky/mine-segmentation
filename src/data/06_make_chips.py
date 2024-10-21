@@ -25,8 +25,7 @@ from samgeo import split_raster
 from src.utils import normalize_geotiff
 from tqdm import tqdm
 
-
-def read_and_chip(file_path, chip_size, output_dir, chip_format):
+def read_and_chip(file_path, chip_size, output_dir, chip_format, use_first_channels=True):
     """
     Reads a GeoTIFF file, creates chips of specified size, and saves them as
     numpy arrays or TIFF files.
@@ -36,17 +35,21 @@ def read_and_chip(file_path, chip_size, output_dir, chip_format):
         chip_size (int): Size of the square chips.
         output_dir (str or Path): Directory to save the chips.
         chip_format (str): Format to save the chips. Either 'npy' or 'tif'.
+        use_first_channels (bool): Flag to indicate if only the first 3 channels should be used.
     """
     os.makedirs(output_dir, exist_ok=True)
 
     if chip_format not in ["npy", "tif"]:
         raise ValueError("Invalid chip format. Use 'npy' or 'tif'.")
-    
+
     s2_image_name = Path(file_path).stem
-    
+
     if chip_format == "npy":
         with rio.open(file_path) as src:
             data = src.read()
+
+            if use_first_channels:
+                data = data[:3, :, :]  # Use only the first 3 channels
 
             n_chips_x = src.width // chip_size
             n_chips_y = src.height // chip_size
