@@ -89,6 +89,8 @@ data/interim/*
 !data/final_dataset.gpkg
 # except the final test tiles wit additional  annotation
 !data/raw/mining_tiles_test_annotations.gpkg
+# except the final final dataset
+!data/processed/mining_tiles_with_masks_and_bounding_boxes.gpkg
 
 # Mac OS-specific storage files
 .DS_Store
