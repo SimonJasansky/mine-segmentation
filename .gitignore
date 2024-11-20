@@ -82,6 +82,8 @@ data/*
 !data/interim/
 data/raw/*
 data/interim/*
+data/processed/*
+!data/processed/
 # except files for the mine annotation app
 !data/raw/mining_tiles_with_masks.gpkg
 !data/interim/erroneous_tiles.gpkg
