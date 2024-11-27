@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/791195560.svg)](https://doi.org/10.5281/zenodo.14229736)
+
 # Automatic Mine Segmentation
 
 This project aims to automate the semantic segmentation of mining areas in satellite images. It explores the use of Visual Foundation Models (VFM) for object detection and segmentation, and compares their performance with custom trained models.
